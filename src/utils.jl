@@ -51,39 +51,6 @@ function stratify_div_into_folds(x::Vector{Float64}; K::Int = 10, percent = 0.2)
 end
 
 """
-    pick_knots(x::AbstractVector{T})
-
-Partial code for picking knots in R's `smooth.spline`.
-
-The source code of `smooth.spline` can be directly accessed via typing `smooth.spline` is an R session. Note that there might be different in different R versions. The code is adapted based on R 3.6.3.
-"""
-# refer to `smooth.spline`
-function pick_knots(x::AbstractVector{T}; tol = 1e-6 * iqr(x), all_knots = false, scaled = false) where T <: AbstractFloat
-    xx = round.(Int, (x .- mean(x)) / tol )
-    # https://stackoverflow.com/questions/50899973/indices-of-unique-elements-of-vector-in-julia
-    # unique index (Noted in techNotes)
-    ud = unique(i -> xx[i], 1:length(xx))
-    ux = sort(x[ud])
-    idx0 = sortperm(x[ud])
-    nx = length(ux)
-    if all_knots
-        nknots = nx
-    else
-        nknots = Int(rcopy(R".nknots.smspl($nx)"))
-    end
-    idx = round.(Int, range(1, nx, length = nknots))
-    if scaled
-        rx = (ux[end] - ux[1])
-        mx = ux[1]
-        ux = (ux .- mx) ./ rx
-        return ux[idx], mx, rx, (1:length(x))[ud][idx0][idx], (1:length(x))[ud][idx0]
-    else
-        # to keep the same output
-        return ux[idx], nothing, nothing, nothing, nothing 
-    end
-end
-
-"""
     coverage_prob(CIs::AbstractMatrix, y0::AbstractVector)
 
 Calculate coverage probability given `n x 2` CI matrix `CIs` and true vector `y0` of size `n`.

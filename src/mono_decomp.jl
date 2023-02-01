@@ -13,6 +13,7 @@ using ProgressMeter
 using Gurobi
 using MonotoneSplines
 import MonotoneSplines.build_model
+import MonotoneSplines.pick_knots
 # using Distributed
 # using SharedArrays
 
@@ -282,12 +283,13 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}; ss = 10.0
                                                             nfold = 10, 
                                                             fixJ = true,
                                                             x0 = x,
+                                                            Js = 4:50,
                                                             one_se_rule = false) where T <: AbstractFloat
     if fixJ
         J, yhat, yhatnew = cv_cubic_spline(x, y, x0, one_se_rule = one_se_rule, nfold = nfold, figname = isnothing(figname) ? figname : figname[1:end-4] * "_bspl.png")
         return cv_mono_decomp_cs(x, y, x0, Js = J:J, ss = ss, figname = figname, nfold = nfold, one_se_rule = one_se_rule)..., yhat, yhatnew
     else
-        return cv_mono_decomp_cs(x, y, x0, ss = ss, figname = figname, nfold = nfold, one_se_rule = one_se_rule)
+        return cv_mono_decomp_cs(x, y, x0, ss = ss, Js = Js, figname = figname, nfold = nfold, one_se_rule = one_se_rule)
     end
 end
 
@@ -917,7 +919,7 @@ end
 
 function build_model!(workspace::WorkSpaceSS, x::AbstractVector{T}; ε = (eps())^(1/3)) where T <: AbstractFloat
     if !isdefined(workspace, 3) # the first two will be automatically initialized
-        knots, mx, rx, idx, idx0 = pick_knots(x, all_knots = false, scaled = true)
+        knots, mx, rx, idx, idx0 = pick_knots(x, all_knots = false)
         bbasis = R"fda::create.bspline.basis(breaks = $knots, norder = 4)"
         Ω = rcopy(R"fda::eval.penalty($bbasis, 2)")
         Ω += ε * 1.0I

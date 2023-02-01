@@ -9,14 +9,11 @@ export gen_data,
        gp,
 
        recover,
-       pick_knots,
        div_into_folds,
        
        # CIs
        coverage_prob,
        conf_band_width,
-
-       sol_as_optim,
 
        predict, # extend StatsBase.predict (The extended method can be also exported, see https://github.com/JuliaStats/StatsBase.jl/blob/master/src/StatsBase.jl)
 
