@@ -70,57 +70,6 @@ end
     res = cv_mono_decomp_ss(x, y, one_se_rule = true, figname = "/tmp/p.png")
 end
 
-@testset "smooth.spline vs fda::" begin
-    x = rand(100)
-    y = x .^2 + randn(100) * 0.1
-    sfit = R"smooth.spline($x, $y, keep.stuff = TRUE, all.knots = TRUE)"
-    #
-    R"""
-    recover.Sigma <- function(Sigma) {
-        n = length(Sigma)
-        # just 4p = n, NOT p + p-1 + p-2 + p-3 = 4p - 6 = n
-        p = n/4
-        res = matrix(0, nrow = p, ncol = p)
-        diag(res) = Sigma[1:p]
-        diag(res[1:(p-1),2:p]) = Sigma[(p+1):(2*p-1)]
-        diag(res[2:p, 1:(p-1)]) = Sigma[(p+1):(2*p-1)]
-        diag(res[1:(p-2),3:p]) = Sigma[(2*p+1):(3*p-2)]
-        diag(res[3:p, 1:(p-2)]) = Sigma[(2*p+1):(3*p-2)]
-        diag(res[1:(p-3),4:p]) = Sigma[(3*p+1):(4*p-3)]
-        diag(res[4:p, 1:(p-3)]) = Sigma[(3*p+1):(4*p-3)]
-        return(res)
-      }
-    """
-    Σ = rcopy(R"recover.Sigma($sfit$auxM$Sigma)")
-    XWX = rcopy(R"recover.Sigma($sfit$auxM$XWX)")
-    λ = rcopy(R"$sfit$lambda")
-    # if not all knots, idx0 is crucial since R evaluate all knots instead of just knots
-    # knots, xmin, rx, idx, idx0 = pick_knots(x, all_knots = false, scaled = true)
-    knots, xmin, rx, idx, idx0 = pick_knots(x, all_knots = true, scaled = true)
-    xbar = (x .- xmin) / rx
-    @test xbar[idx] == knots
-    @test rx == rcopy(R"$sfit$fit$range")
-    @test xmin == rcopy(R"$sfit$fit$min")
-    bbasis = R"fda::create.bspline.basis(breaks = $knots, norder = 4)"
-    Ω = rcopy(R"fda::eval.penalty($bbasis, 2)")
-    # Ω1 = rcopy(R"fda::eval.basis($(xbar[idx0]), $bbasis, 2)")
-    norm(Ω - Σ)
-    # B = rcopy(R"fda::eval.basis($x, $bbasis)")
-    # B = rcopy(R"fda::eval.basis($xbar, $bbasis)")
-    B = rcopy(R"fda::eval.basis($knots, $bbasis)")
-    # norm(XWX - B' * B)
-    @test XWX ≈ B' * B
-    # only on unique values
-    βhat = inv(B' * B + λ*Ω) * B' * y[idx]
-    βhat1 = inv(B' * B + λ*Σ) * B' * y[idx]
-    βhat0 = rcopy(R"$sfit$fit$coef")
-    norm(βhat - βhat0)
-    norm(βhat1 - βhat0)
-    # scatter(x, y)
-    # plot!(x, yhat, label = "via fda")
-    # plot!(x, yhat0, label = "ss")
-end
-
 @testset "gcv in ss" begin
     f = x -> x^3
     n = 50

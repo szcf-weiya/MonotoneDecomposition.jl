@@ -1,6 +1,8 @@
 using Test
 using Plots
-include("../src/genfunc.jl")
+using MonotoneDecomposition
+using GaussianProcesses
+using Statistics
 
 @testset "GP" begin
     @testset "kernel function" begin

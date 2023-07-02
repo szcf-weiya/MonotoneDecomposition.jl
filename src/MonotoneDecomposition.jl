@@ -5,8 +5,10 @@ include("genfunc.jl")
 include("mono_decomp.jl")
 
 export gen_data,
-       mono_decomp,
+       gen_kern,
        gp,
+
+       mono_decomp,
 
        recover,
        div_into_folds,
