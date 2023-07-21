@@ -44,19 +44,6 @@ jobs:
         LD_PRELOAD: /opt/hostedtoolcache/julia/${{ matrix.julia-version }}/x64/bin/../lib/julia/libcurl.so.4
         # CURL_CONFIG: 'bash /tmp/mycurl-config'
 
-    - uses: webfactory/ssh-agent@v0.7.0 # install private repo
-      with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-    - name: Clone private repo
-      run: git clone git@github.com:szcf-weiya/MonotoneSplines.jl.git /tmp/MonotoneSplines.jl
-    - name: Install Dependence for Julia
-      run: |
-        using Pkg
-        Pkg.activate(".")
-        Pkg.add(url="/tmp/MonotoneSplines.jl")
-        Pkg.instantiate()
-      shell: julia {0}
-
     - uses: julia-actions/julia-runtest@v1
       with:
         prefix: xvfb-run
@@ -114,13 +101,6 @@ jobs:
           LD_PRELOAD: /opt/hostedtoolcache/julia/${{ matrix.julia-version }}/x64/bin/../lib/julia/libcurl.so.4
           # CURL_CONFIG: 'bash /tmp/mycurl-config'
 
-      - uses: webfactory/ssh-agent@v0.7.0 # install private repo
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-      - name: Clone private repo
-        run: git clone git@github.com:szcf-weiya/MonotoneSplines.jl.git /tmp/MonotoneSplines.jl
-      - name: Install dependencies
-        run: julia --project=docs/ -e 'using Pkg; Pkg.add(url="/tmp/MonotoneSplines.jl"); Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
       - uses: julia-actions/julia-docdeploy@v1
         env:
           LD_LIBRARY_PATH: /opt/R/${{ matrix.r-version }}/lib/R/lib

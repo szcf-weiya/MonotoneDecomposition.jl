@@ -133,16 +133,37 @@ end
     # save_grid_plots(figs)
 end
 
-@testset "fix ratio in ss" begin
+@testset "one standard rule in cross-validation" begin
+    μs = [3 2 1 2 3;
+          4 3 2 0.9 4;
+          2 1.2 1 0 2] * 1.0
+    σs = ones(3, 4) * 1.5
+    # an alternative might be directly take μ+σ, but it is hard to determine the simplest model when NOT smaller is simpler
+    @test MonotoneDecomposition.cv_one_se_rule2(μs, σs) == (3, 2)
+end
+
+@testset "cross-validation for monotone decomposition with smoothing splines" begin
     f = x -> x^3
     n = 100
     σ = 0.1
     x, y, x0, y0 = gen_data(n, σ, f)
     yhat, yhatnew, Ω, λopt = smooth_spline(x, y, x0)
-    D, _ = cvfit(x, y, 0.05:0.05:0.99, λopt, figname = nothing)
-    [norm(predict(D, x0) - y0), norm(yhatnew - y0)]
-    # plot([x, y], [x0, y0], workspace, D, yhatnew, digits = 5)
-    all(yhat[2:end] - yhat[1:end-1] .>= 0)
+    @testset "fix λ as λopt in ss" begin
+        D, _ = cvfit(x, y, 0.05:0.05:0.99, λopt, figname = nothing)
+        [norm(predict(D, x0) - y0), norm(yhatnew - y0)]
+        # plot([x, y], [x0, y0], workspace, D, yhatnew, digits = 5)
+        all(yhat[2:end] - yhat[1:end-1] .>= 0)
+    end
+
+    @testset "set μmax" begin
+        D, _ = cvfit(x, y, 1.0, range(λopt/2, λopt*2, length = 3), nμ = 10, figname = nothing)
+        @test all(D.γup[2:end] - D.γup[1:end-1] .>= 0)
+    end 
+
+    @testset "fix μ, vary λ" begin
+        D, _ = cvfit(x, y, 0.1, λopt, nλ = 10, figname = nothing)
+        @test all(D.γup[2:end] - D.γup[1:end-1] .>= 0)
+    end
 end
 
 @testset "fix lambda in ss" begin

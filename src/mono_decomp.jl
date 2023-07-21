@@ -1200,6 +1200,24 @@ function cv_one_se_rule(μs::AbstractMatrix{T}, σs::AbstractMatrix{T}; verbose 
     end
 end
 
+function cv_one_se_rule2(μs::AbstractMatrix{T}, σs::AbstractMatrix{T}; verbose = true, small_is_simple = [true, true]) where T <: AbstractFloat
+    ind = argmin(μs)
+    iopt, jopt = ind[1], ind[2]
+    jopt1 = cv_one_se_rule(μs[iopt,:], σs[iopt,:], small_is_simple = small_is_simple[2])
+
+    iopt1 = cv_one_se_rule(μs[:,jopt], σs[:,jopt], small_is_simple = small_is_simple[1])
+
+    if verbose
+        println("without 1se rule: iopt = $iopt, jopt = $jopt")
+    end
+    # determine the minimum one: compare (iopt1, jopt) vs (iopt, jopt1), take the larger one since both are in 1se
+    if μs[iopt1, jopt] < μs[iopt, jopt1]
+        return iopt, jopt1
+    else
+        return iopt1, jopt
+    end
+end
+
 """
     cvplot(sil::String)
     cvplot(μerr::AbstractVector, σerr::Union{Nothing, AbstractVector{T}}, paras::AbstractVector)
@@ -1310,28 +1328,30 @@ end
 
 Cross-validation for monotone decomposition.
 """
-function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μmax::Real, rλ::Real, λstar::Real; nfold = 10, nμ = 100, maxiter = 20, figname = "/tmp/cv_curve.png", ρ = 0.05, tol = eps()^(1/3), nλ = 10, seed = rand(UInt64)) where T <: AbstractFloat
-    λs = range(1-rλ, 1+rλ, length = nλ + 1) * λstar
-    D = cvfit(x, y, μmax, λs, nfold = nfold, nμ = nμ, maxiter = maxiter, figname = figname, ρ = ρ, seed = seed)
-    if abs(1 - D.λ / λstar) / (2rλ) < ρ
-        iter = 0
-        while true 
-            iter += 1
-            rλ = rλ + 0.05
-            nλ += 2
-            if rλ <= 0
-                break
-            end
-            println("extend the search region of λ: searching [1-$rλ, 1+$rλ]")
-            λs = range(1-rλ, 1+rλ, length = nλ + 1) * λstar
-            D = cvfit(x, y, μmax, λs, nfold = nfold, nμ = nμ, maxiter = maxiter, figname = figname, ρ = ρ, seed = seed)
-            if (abs(1 - D.λ / λstar) / (2rλ) >= ρ) | (iter > maxiter)
-                break
-            end
-        end
-    end
-    return D
-end
+## TODO: remove? seems tricky, and several parameters should be determined
+# automatically extend the ratio for searching λ
+# function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μmax::Real, rλ::Real, λstar::Real; nfold = 10, nμ = 100, maxiter = 20, figname = "/tmp/cv_curve.png", ρ = 0.05, tol = eps()^(1/3), nλ = 10, seed = rand(UInt64)) where T <: AbstractFloat
+#     λs = range(1-rλ, 1+rλ, length = nλ + 1) * λstar
+#     D = cvfit(x, y, μmax, λs, nfold = nfold, nμ = nμ, maxiter = maxiter, figname = figname, ρ = ρ, seed = seed)
+#     if abs(1 - D.λ / λstar) / (2rλ) < ρ
+#         iter = 0
+#         while true 
+#             iter += 1
+#             rλ = rλ + 0.05
+#             nλ += 2
+#             if rλ <= 0
+#                 break
+#             end
+#             println("extend the search region of λ: searching [1-$rλ, 1+$rλ]")
+#             λs = range(1-rλ, 1+rλ, length = nλ + 1) * λstar
+#             D = cvfit(x, y, μmax, λs, nfold = nfold, nμ = nμ, maxiter = maxiter, figname = figname, ρ = ρ, seed = seed)
+#             if (abs(1 - D.λ / λstar) / (2rλ) >= ρ) | (iter > maxiter)
+#                 break
+#             end
+#         end
+#     end
+#     return D
+# end
 
 # tune lambda after fixing mu
 function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μstar::Real, λstar::Real; nfold = 10, maxiter = 20, figname = "/tmp/cv_curve.png", ρ = 0.05, tol = eps()^(1/3), nλ = 10, rλ = 0.1, seed = rand(UInt64)) where T <: AbstractFloat
@@ -1354,7 +1374,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μstar::Real, λstar:
             min_μerr = minimum(μerr)
             if min_μerr > last_min_μerr
                 println("no better lambda after extension")
-                return lastD
+                return lastD, last_min_μerr
             end
             if (abs(1 - D.λ / λstar) / (2rλ) >= ρ) | (iter > maxiter)
                 break
@@ -1363,15 +1383,17 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μstar::Real, λstar:
             lastD = deepcopy(D)
         end
     end
-    return D
+    return D, last_min_μerr
 end
 
-# suppose μs = (1:nμ) ./ nμ * μmax
+"""
+    Given `μmax`, and construct μs = (1:nμ) ./ nμ * μmax. If the optimal `μ` near the boundary, double or halve `μmax`.
+"""
 function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μmax::Real, λ::AbstractVector{T}; nfold = 10, nμ = 100, maxiter = 20, figname = "/tmp/cv_curve.png", ρ = 0.05, tol = eps()^(1/3), seed = rand(UInt64)) where T <: AbstractFloat
     # μ = (1:nμ) ./ nμ * μmax
     D, μerr = cvfit(x, y, (1:nμ) ./ nμ .* μmax, λ, figname = figname, nfold = nfold, seed = seed)
     last_min_μerr = minimum(μerr)
-    # if D.μ near the right boundary
+    # if D.μ near the left boundary
     if D.μ / μmax < ρ
         iter = 0
         lastD = deepcopy(D)
@@ -1383,7 +1405,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μmax::Real, λ::Abst
             min_μerr = minimum(μerr)
             if min_μerr > last_min_μerr
                 println("no better mu after division")
-                return lastD, lastW
+                return lastD, last_min_μerr
             end
             if (D.μ / μmax >= ρ) | (iter > maxiter) # suppose it cannot be suddenly larger than 0.95 (TODO)
                 break
@@ -1407,7 +1429,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μmax::Real, λ::Abst
             min_μerr = minimum(μerr)
             if min_μerr > last_min_μerr
                 println("no better mu after extension")
-                return lastD
+                return lastD, last_min_μerr
             end
             if ( (D.μ - μmin) / (μmax - μmin) <= 1-ρ) | (iter > maxiter) # suppose it cannot be suddenly smaller than 0.05 
                 break
@@ -1416,7 +1438,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μmax::Real, λ::Abst
             lastD = deepcopy(D)
         end
     end
-    return D
+    return D, last_min_μerr
 end
 
 function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, paras::AbstractMatrix{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64)) where T <: AbstractFloat
