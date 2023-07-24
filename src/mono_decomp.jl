@@ -470,6 +470,7 @@ function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                             nfold = 5, one_se_rule = true,
                             resfolder = "/tmp",
                             ind = 1:4,
+                            show_progress = true,
                             nλ = 20, kw...)
     @info "Benchmarking $f with $nrep repetitions"
     title = "$f (nrep = $nrep)"
@@ -486,9 +487,9 @@ function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
     elseif f == "sigmoid"
         f = x -> 1 / (1 + exp(-5x))
     end
-    # @sync @distributed for i = 1:nrep
     for i = 1:nrep
-        @showprogress "iter = $i: " for (j, σ) in enumerate(σs)
+        p = Progress(nσ, dt = 1, desc = "$title, iter = $i: ", enabled = show_progress)
+        for (j, σ) in enumerate(σs)
             figname_fit = ifelse(jplot, joinpath(resfolder, "$i-optim_sigma$σ.png"), nothing)
             figname_cv = ifelse(jplot, joinpath(resfolder, "$i-cv_optim_$σ.png"), nothing)
             if startswith(competitor, "ss")
@@ -505,6 +506,7 @@ function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                                                         one_se_rule = one_se_rule,
                                                         fixJ = !occursin("cvbspl2", competitor), kw...)
             end
+            next!(p)
         end
     end
     # return res
@@ -544,6 +546,7 @@ function summary(;nλ = 20,
         dtitles[1:3] = [L"x^2" L"x^3" L"\exp(x)"]
     end
     ntitle = length(titles)
+    @info "summarize result $resfolder in $format format"
     if endswith(resfolder, "/")
         filename = basename(resfolder[1:end-1])
         resfolder0 = dirname(resfolder[1:end-1])
