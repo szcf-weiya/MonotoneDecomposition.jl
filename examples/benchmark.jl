@@ -8,12 +8,14 @@ fs = ["x^2" "x^3" "exp(x)" "sigmoid" "SE_1" "SE_0.1" "Mat12_1" "Mat12_0.1" "Mat3
 nrep = 1
 nλ = 2
 nfold = 2
+idxf = 1:2 # run locally
 competitor = "ss_single_lambda"
 nλ = ifelse(occursin("single_lambda", competitor), 1, nλ)
 one_se_rule = false
 resfolder0 = "/tmp"
 if length(ARGS) > 0
     @info "Use args passed from CLI"
+    idxf = 1:length(fs)
     competitor = ARGS[1]
     resfolder0 = ARGS[2]
     if !isdir(resfolder0)
@@ -44,7 +46,7 @@ pmap(
         verbose = false,
         show_progress = f == "x^3" # keep one progressbar
     ),
-    fs[1:2]
+    fs[idxf]
 )
 
 # !!! tip "run from command line"
