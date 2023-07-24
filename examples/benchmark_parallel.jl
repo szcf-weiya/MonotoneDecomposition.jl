@@ -1,6 +1,6 @@
 # Benchmarking
 using Distributed
-using MonotoneDecomposition
+@everywhere using MonotoneDecomposition
 
 # Candidate functions
 fs = ["x^2" "x^3" "exp(x)" "sigmoid" "SE_1" "SE_0.1" "Mat12_1" "Mat12_0.1" "Mat32_1" "Mat32_0.1" "RQ_0.1_0.5" "Periodic_0.1_4"]
@@ -8,7 +8,7 @@ fs = ["x^2" "x^3" "exp(x)" "sigmoid" "SE_1" "SE_0.1" "Mat12_1" "Mat12_0.1" "Mat3
 nrep = 1
 nλ = 2
 nfold = 2
-f = fs[1]
+idxf = 1:2 # run locally
 competitor = "ss_single_lambda"
 nλ = ifelse(occursin("single_lambda", competitor), 1, nλ)
 one_se_rule = false
@@ -25,9 +25,9 @@ if length(ARGS) > 0
     nrep = parse(Int, ARGS[4])
     nfold = parse(Int, ARGS[5])
     one_se_rule = parse(Bool, ARGS[6])
-    f = ARGS[7]
-    if length(ARGS) > 7
-        timestamp = replace(strip(ARGS[8]), ":" => "_") # passed from scripts
+    idxf = 1:length(fs)
+    if length(ARGS) > 6
+        timestamp = AGRS[end] # passed from scripts
     end
 end
 resfolder = joinpath(resfolder0, "nrep$nrep-nfold$nfold-nlam$nλ-1se$(one_se_rule)-$competitor-$timestamp")
@@ -36,19 +36,22 @@ if !isdir(resfolder)
 end
 @info "Results are saved into $resfolder"
 
-benchmarking(
-    f;
-    σs = [0.1, 0.2, 0.4, 0.5, 1.0, 1.5, 2.0], # noise level to be surveyed
-    jplot = false, # μerr vs σs
-    nrep = nrep, # NB: for fast auto-generation procedure, only use nrep = 1; in the paper, use nrep = 100
-    competitor = competitor, 
-    nfold = nfold, # number of folds
-    one_se_rule = one_se_rule, 
-    nλ = nλ, # the number of λ to be searched
-    rλ = 0.5, # the search region of λ, (1-rλ, 1+rλ)*λ
-    resfolder = resfolder,
-    verbose = false,
-    show_progress = true
+pmap(
+    f->benchmarking(
+        f;
+        σs = [0.1, 0.2, 0.4, 0.5, 1.0, 1.5, 2.0], # noise level to be surveyed
+        jplot = false, # μerr vs σs
+        nrep = nrep, # NB: for fast auto-generation procedure, only use nrep = 1; in the paper, use nrep = 100
+        competitor = competitor, 
+        nfold = nfold, # number of folds
+        one_se_rule = one_se_rule, 
+        nλ = nλ, # the number of λ to be searched
+        rλ = 0.5, # the search region of λ, (1-rλ, 1+rλ)*λ
+        resfolder = resfolder,
+        verbose = false,
+        show_progress = f == "x^3" # keep one progressbar
+    ),
+    fs[idxf]
 )
 
 # !!! tip "run from command line"
