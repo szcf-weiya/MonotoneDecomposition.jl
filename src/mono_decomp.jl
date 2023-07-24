@@ -321,7 +321,11 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             nfold = 10, 
                                                             tol = 1e-7,
                                                             x0 = x, # test point of x
-                                                            one_se_rule = false) where T <: AbstractFloat
+                                                            method = "single_lambda", # fix_ratio, iter_search, grid_search
+                                                            nk = 20, #used in fix_ratio
+                                                            nλ = 10, rλ = 0.5, # used in grid_search
+                                                            rel_tol = 1e-1, maxiter = 10, # iter_search
+                                                            one_se_rule = false, kw...) where T <: AbstractFloat
     yhat, yhatnew, Ω, λ, spl, B = smooth_spline(x, y, x0, design_matrix = true, keep_stuff = true)
     γup, γdown = mono_decomp(rcopy(R"$spl$fit$coef"))
     s0 = norm(B * (γup .- γdown))
@@ -333,7 +337,53 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
     if one_se_rule # search in relatively large region
         r = min(10000r, 1.0)
     end
-    D, μs, errs, σerrs = cvfit_gss(x, y, [0, min(r, 1.0)], λ, figname = figname, nfold = nfold, tol = tol)
+    μrange = [1e-7, min(r*1.0, 1)]
+    if method == "single_lambda"
+        @info "Smoothing Splines with fixed λ"
+        D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λ, figname = figname, nfold = nfold, tol = tol)
+    elseif method == "fix_ratio"
+        @info "Smoothing Splines with fixratio strategy"
+        ks = range(0.05, 0.99, length = nk)
+        D, μs, errs, σerrs = cvfit(x, y, ks, λ, figname = figname, nfold = nfold)
+    elseif method == "iter_search" #88
+        @info "Smoothing Splines with iter-search: λ -> μ -> λ -> ... -> μ"
+        iter = 0
+        λ0 = λ # make a backup
+        seed = rand(UInt64)
+        while true
+            iter += 1
+            ## tune mu given lambda
+            @info "tune mu given lambda = $λ"
+            # D1, workspace1 = cvfit(x, y, μmax * r, [λ], nfold = nfold, figname = figname, nμ = nμ, ρ = ρ)
+            ## if needed, perform one se rule on the last iteration given lambda
+            D1, μs, errs, σerrs = cvfit_gss(x, y, μrange, λ, nfold = nfold, figname = figname, tol = tol, seed = seed)
+            # since D is not defined in the first iteration, so use `if..else`, and hence cannot use `ifelse`
+            if iter == 1
+                err_μ = 1.0
+            else
+                err_μ = abs(D1.μ - D.μ) / D1.μ
+            end
+            if err_μ < rel_tol
+                D = D1
+                break
+            end
+            ## re-tune lambda given mu
+            @info "tune lambda given mu = $(D1.μ)"
+            # D, workspace = cvfit(x, y, D1.μ, λ, nfold = nfold, figname = figname, nλ = nλ, ρ = ρ)
+            D, _ = cvfit_gss(x, y, [1e-7, 1.5λ0], D1.μ, nfold = nfold, figname = figname, λ_is_μ = true, tol = tol, seed = seed)
+            err_λ = abs(D.λ - D1.λ) / D.λ
+            λ = D.λ # for next iteration
+            @debug "iter = $iter, err_μ = $err_μ, err_λ = $err_λ"
+            if (iter > maxiter) | (err_λ < rel_tol)
+                break
+            end
+        end
+    else # grid_search
+        λs = range(1-rλ, 1+rλ, length = nλ) .* λ
+        @info "Smoothing Splines with grid-search λ ∈ $λs, μ ∈ $μrange"
+        seed = rand(UInt64)
+        D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λs, nfold = nfold, figname = figname, seed = seed, tol = tol)
+    end
     if one_se_rule
         ind = cv_one_se_rule(errs, σerrs, small_is_simple = false)
         μopt = μs[ind]
@@ -352,18 +402,18 @@ function summary_res(σs = 0.2:0.2:1.0)
     run(`convert $fignames +append /tmp/curve_optim.png`)
 end
 
-function benchmarking_cs(n::Int = 100, σ::Float64 = 0.5, f::Function = x->x^3; fixJ = true,
+function benchmarking_cs(n::Int = 100, σ::Float64 = 0.5, f::Union{Function, String} = x->x^3; fixJ = true,
                                                                                figname_cv = nothing,
                                                                                figname_fit = nothing,
                                                                                Js = 4:20,
-                                                                               ss = 10.0 .^ (-6:0.5:0))
+                                                                               μs = 10.0 .^ (-6:0.5:0))
     x, y, x0, y0 = gen_data(n, σ, f)
     # J is determined from cubic_spline (deprecated the choice of arbitrary J)
     J, yhat, yhatnew = cv_cubic_spline(x, y, x0)
     if fixJ
         Js = J:J
     end
-    D, _ = cv_mono_decomp_cs(x, y, x0, Js = Js, ss = ss, figname = figname_cv)
+    D, _ = cv_mono_decomp_cs(x, y, x0, Js = Js, ss = μs, figname = figname_cv)
     err = [norm(D.yhat - y)^2 / length(y), norm(predict(D, x0) - y0)^2 / length(y0), 
            norm(yhat - y)^2 / length(y), norm(yhatnew - y0)^2 / length(y0),
            var(y), var(y0)]
@@ -376,103 +426,19 @@ function benchmarking_cs(n::Int = 100, σ::Float64 = 0.5, f::Function = x->x^3; 
     return err
 end
 
-function benchmarking_ss(n::Int = 100, σ::Float64 = 0.5, f::Function = x->x^3; penalty_ratio = true,
-                                                                               s_is_ratio = false,
-                                                                               use_μ = false,
-                                                                               nλ = 1, # the number of λ to be searched
-                                                                               rλ = 0.1, # the search region of λ, (1-rλ, 1+rλ)*λ
-                                                                               ss = 1:20, 
-                                                                               k_ss = 1, 
-                                                                               tol = 1e-5, maxiter = 10, 
-                                                                               rel_tol = 1e-1,
-                                                                               nfold = 5, one_se_rule = true,
-                                                                               fixratio = false,
-                                                                               iter_search = false,
-                                                                               ks = range(0.05, 0.99, length = 20), # use in ss_fixratio
-                                                                               figname_cv = nothing,
-                                                                               figname_fit = nothing
-                                                   )
+function benchmarking_ss(n::Int = 100, σ::Float64 = 0.5, 
+                            f::Union{Function, String} = x->x^3; 
+                                nfold = 5, one_se_rule = true,
+                                method = "single_lambda",
+                                figname_cv = nothing,
+                                figname_fit = nothing, kw...
+                        )
     x, y, x0, y0 = gen_data(n, σ, f)
-    yhat, yhatnew, Ω, λ, spl, B = smooth_spline(x, y, x0, design_matrix = true, keep_stuff = true)
-    γup, γdown = mono_decomp(rcopy(R"$spl$fit$coef"))
-    if penalty_ratio
-        # s0 = norm(yhat)
-        s0 = norm(B * (γup .- γdown))
-        # penalty ratio
-        r = λ * (γup .+ γdown)' * Ω * (γup .+ γdown) / s0^2
-        if r < 0
-            # due to unstable numerical values, the quadratic norm can be negative, so set a roughly smaller value
-            r = 0.1
-        end
-        println("σ = $σ, penalty ratio = $r")
-    else
-        r = 1
-    end
-    if s_is_ratio
-        ss = ss
-    else
-        if !use_μ
-            ss = s0 * ss / maximum(ss) * k_ss 
-        else
-            ss = r * ss_backup
-        end
-    end
-    if (nλ == 1) || s_is_ratio
-        λs = [λ]
-    else
-        if k_ss == 1
-            # λs = range(1-rλ, 1+rλ/nλ, length = nλ) .* λ
-            λs = range(1-rλ, 1+rλ, length = nλ) .* λ
-        else                       
-            λs = range(1/k_ss, k_ss, length = nλ) .* λ
-        end
-    end
-    if fixratio
-        @info "Smoothing Splines with fixratio strategy"
-        D, _ = cvfit(x, y, ks, λ, nfold = nfold, figname = figname_cv)
-    elseif nλ == 1
-        @info "Smoothing Splines with fixed λ"
-        # D, workspace = cvfit(x, y, μmax * r, λs, nfold = nfold, figname = figname, nμ = nμ, ρ = ρ)
-        μrange = [1e-7, min(r*1.0, 1)] # make sure the region between [0, 1] has been fully explored
-        D, _ = cvfit_gss(x, y, μrange, λ, nfold = nfold, figname = figname_cv)
-    elseif iter_search #88
-        @info "Smoothing Splines with iter-search: λ -> μ -> λ -> ... -> μ"
-        iter = 0
-        λ0 = λ # make a backup
-        seed = rand(UInt64)
-        while true
-            iter += 1
-            ## tune mu given lambda
-            @info "tune mu given lambda = $λ"
-            # D1, workspace1 = cvfit(x, y, μmax * r, [λ], nfold = nfold, figname = figname, nμ = nμ, ρ = ρ)
-            D1, _ = cvfit_gss(x, y, [1e-7, min(r*1.0, 1)], λ, nfold = nfold, figname = figname_cv, tol = tol, seed = seed)
-            # since D is not defined in the first iteration, so use `if..else`, and hence cannot use `ifelse`
-            if iter == 1
-                err_μ = 1.0
-            else
-                err_μ = abs(D1.μ - D.μ) / D1.μ
-            end
-            if err_μ < rel_tol
-                D = D1
-                break
-            end
-            ## re-tune lambda given mu
-            @info "tune lambda given mu = $(D1.μ)"
-            # D, workspace = cvfit(x, y, D1.μ, λ, nfold = nfold, figname = figname, nλ = nλ, ρ = ρ)
-            D, _ = cvfit_gss(x, y, [1e-7, 1.5λ0], D1.μ, nfold = nfold, figname = figname_cv, λ_is_μ = true, tol = tol, seed = seed)
-            err_λ = abs(D.λ - D1.λ) / D.λ
-            λ = D.λ # for next iteration
-            @debug "iter = $iter, err_μ = $err_μ, err_λ = $err_λ"
-            if (iter > maxiter) | (err_λ < rel_tol)
-                break
-            end
-        end
-    else
-        μrange = [1e-7, min(r*1.0, 1)]
-        @info "Smoothing Splines with grid-search λ ∈ $λs, μ ∈ $μrange"
-        seed = rand(UInt64)
-        D = cvfit_gss(x, y, μrange, λs, nfold = nfold, figname = figname_cv, seed = seed, tol = tol)
-    end
+    D, μopt, μs, errs, σerrs, yhat, yhatnew = cv_mono_decomp_ss(x, y; x0 = x0,
+                                                                figname = figname_cv,
+                                                                nfold = nfold,
+                                                                method = method,
+                                                                one_se_rule = one_se_rule, kw...)
     if !isnothing(figname_fit)
         savefig(
             plot([x, y], [x0, y0], D, yhatnew),
@@ -488,33 +454,20 @@ end
 
 """
 
-- If `use_μ`, then `μ` takes values from `ss`, and `λ` takes values from `λs`
 
 - `competitor`: 
     if `nλ = 1`, then fixed λ; otherwise, there are two choices: ss_grid, ss_iter
 
 """
-function benchmarking(; n = 100, σs = 0.2:0.2:1,
-                            f = x->x^3, J = 10, 
-                            ss = 1:20, k_ss = 1, s_is_ratio = false,
-                            use_μ = false,
+function benchmarking(f::Union{Function, String} = x->x^3; n = 100, σs = 0.2:0.2:1,
+                            J = 10, 
+                            μs = 10.0 .^ (-6:0.5:0), ## bspl
                             jplot = false, nrep = 100,
-                            tt = nothing,
-                            nλ = 1, # the number of λ to be searched
-                            rλ = 0.1, # the search region of λ, (1-rλ, 1+rλ)*λ
-                            auto = false,
-                            competitor = ifelse(isnothing(tt), "bspl", "ss"), # ss_fixratio, ss_grid, ss_iter
+                            competitor = "ss_single_lambda", # bspl, # ss_fix_ratio, ss_grid_search, ss_iter_search
                             nfold = 5, one_se_rule = true,
-                            std_by_norm = true,
                             resfolder = "/tmp",
-                            penalty_ratio = true,
-                            μmax = 0.1,
-                            nμ = 200,
-                            ρ = 0.02,
-                            μrange = [1e-7, 1], tol = 1e-5, maxiter = 10, rel_tol = 1e-1,
-                            ks = range(0.05, 0.99, length = 10), # use in ss_fixratio
                             ind = 1:4,
-                            title = "")
+                            title = "", kw...)
     nσ = length(σs)
     res = zeros(nrep, 6, nσ)
     # res = SharedArray{Float64}(nrep, 4, nσ)
@@ -531,28 +484,22 @@ function benchmarking(; n = 100, σs = 0.2:0.2:1,
         f = x -> 1 / (1 + exp(-5x))
     end
     title *= " (nrep = $nrep)"
-    filename = replace(title, " "=>"_") * "sig$σs-nlam$nλ-rlam$rλ.sil"
-    λs = nothing
-    ss_backup = ss
-    s0 = nothing
+    filename = replace(title, " "=>"_") * "sig$σs-$competitor.sil"
     # @sync @distributed for i = 1:nrep
     for i = 1:nrep
         @showprogress "iter = $i: " for (j, σ) in enumerate(σs)
-            figname_fit = ifelse(jplot, "/tmp/$i-optim_sigma$σ.png", nothing)
-            figname_cv = ifelse(jplot, "/tmp/$i-cv_optim_$σ.png", nothing)
+            figname_fit = ifelse(jplot, joinpath(resfolder, "$i-optim_sigma$σ.png"), nothing)
+            figname_cv = ifelse(jplot, joinpath(resfolder, "$i-cv_optim_$σ.png"), nothing)
             if startswith(competitor, "ss")
-                res[i, :, j] = benchmarking_ss(n, σ, f, figname_cv = figname_cv, 
+                res[i, :, j] = benchmarking_ss(n, σ, f; figname_cv = figname_cv, 
                                                         figname_fit = figname_fit,
-                                                        fixratio = occursin("fixratio", competitor),
-                                                        nλ = nλ,
                                                         nfold = nfold,
-                                                        iter_search = occursin("iter", competitor),
-                                                        ss = ss)
+                                                        method = competitor[4:end], kw...)
             else
-                res[i, :, j] = benchmarking_cs(n, σ, f, figname_cv = figname_cv, 
+                res[i, :, j] = benchmarking_cs(n, σ, f; figname_cv = figname_cv, 
                                                         figname_fit = figname_fit,
-                                                        ss = ss, 
-                                                        fixJ = !occursin("cvbspl2", competitor))
+                                                        μs = μs, 
+                                                        fixJ = !occursin("cvbspl2", competitor), kw...)
             end
         end
     end
@@ -1170,7 +1117,7 @@ function cv_one_se_rule(μs::AbstractVector{T}, σs::AbstractVector{T}; small_is
     return iopt
 end
 
-function cv_one_se_rule(μs::AbstractMatrix{T}, σs::AbstractMatrix{T}; verbose = true, small_is_simple = [true, true]) where T <: AbstractFloat
+function cv_one_se_rule_deprecated(μs::AbstractMatrix{T}, σs::AbstractMatrix{T}; verbose = true, small_is_simple = [true, true]) where T <: AbstractFloat
     ind = argmin(μs)
     iopt, jopt = ind[1], ind[2]
     # fix iopt, find the minimum jopt
@@ -1200,7 +1147,7 @@ function cv_one_se_rule(μs::AbstractMatrix{T}, σs::AbstractMatrix{T}; verbose 
     end
 end
 
-function cv_one_se_rule2(μs::AbstractMatrix{T}, σs::AbstractMatrix{T}; verbose = true, small_is_simple = [true, true]) where T <: AbstractFloat
+function cv_one_se_rule(μs::AbstractMatrix{T}, σs::AbstractMatrix{T}; verbose = true, small_is_simple = [true, true]) where T <: AbstractFloat
     ind = argmin(μs)
     iopt, jopt = ind[1], ind[2]
     jopt1 = cv_one_se_rule(μs[iopt,:], σs[iopt,:], small_is_simple = small_is_simple[2])
@@ -1470,7 +1417,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, paras::AbstractMatrix
     ind = argmin(μerr)
     workspace = WorkSpaceSS()
     D = mono_decomp_ss(workspace, x, y, paras[ind, 2], paras[ind, 1])
-    return D, μerr
+    return D, paras[:, 1], μerr, σerr
 end
 
 function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}, λ::AbstractVector{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64)) where T <: AbstractFloat
@@ -1600,14 +1547,20 @@ For each `λ` in `λs`, perform `cvfit(x, y, μrange, λ)`, and store the curren
 function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λs::AbstractVector{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), tol = 1e-7, λ_is_μ = false) where T <: AbstractFloat
     best_err = Inf
     D = nothing
+    best_μs = nothing
+    best_errs = nothing
+    best_σerrs = nothing
     for λ in λs
         @info "given λ = $λ, search μ..."
-        Di, μi, erri = cvfit_gss(x, y, μrange, λ, nfold = nfold, figname = figname, seed = seed, tol = tol)
+        Di, μi, erri, σerri = cvfit_gss(x, y, μrange, λ, nfold = nfold, figname = figname, seed = seed, tol = tol)
         if best_err > minimum(erri)
             D = Di
             best_err = minimum(erri)
+            best_μs = μi
+            best_errs = erri
+            best_σerrs = σerri
         end
         @debug "λ = $λ, err = $(minimum(erri)), best_err = $best_err"
     end
-    return D
+    return D, best_μs, best_errs, best_σerrs
 end

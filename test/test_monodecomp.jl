@@ -139,7 +139,7 @@ end
           2 1.2 1 0 2] * 1.0
     σs = ones(3, 4) * 1.5
     # an alternative might be directly take μ+σ, but it is hard to determine the simplest model when NOT smaller is simpler
-    @test MonotoneDecomposition.cv_one_se_rule2(μs, σs) == (3, 2)
+    @test MonotoneDecomposition.cv_one_se_rule(μs, σs) == (3, 2)
 end
 
 @testset "cross-validation for monotone decomposition with smoothing splines" begin
@@ -539,7 +539,7 @@ end
 end
 
 @testset "benchmarking experiments" begin
-    benchmarking(jplot = false, nrep=1, f = "x^3", σs = [0.1], auto = false, competitor = "ss", ss=[0.001, 1.0], nfold = 2, one_se_rule=false, std_by_norm = false, s_is_ratio=false, use_μ = true, nλ = 2, μmax = 1, rλ = 0.5, resfolder = "/tmp")
+    benchmarking(jplot = false, nrep=1, σs = [0.1], competitor = "ss_single_lambda", nfold = 2, one_se_rule=false, resfolder = "/tmp")
     @testset "cubic splines" begin
         Random.seed!(1234)
         res = benchmarking_cs(fixJ = false, figname_cv="/tmp/cv.png", figname_fit="/tmp/fit.png")
@@ -550,22 +550,16 @@ end
         @test res[2] < res[4]
     end
     @testset "smoothing splines" begin
-        # fix lambda
-        Random.seed!(1234)
-        res = benchmarking_ss(nλ=1)
-        @test res[2] < res[4]
-        # fixratio
-        Random.seed!(1234)
-        res = benchmarking_ss(fixratio = true, ks = range(0.7, 0.99, length = 20))
-        @test res[2] < res[4]
-        # grid search
-        Random.seed!(1234)
-        res = benchmarking_ss(nλ=2)
-        @test res[2] < res[4]
-        # iter search
-        Random.seed!(1234)
-        res = benchmarking_ss(nλ = 2, iter_search=true)
-        @test res[2] < res[4]
+        for one_se_rule in [false, true]
+            for method in ["single_lambda", "fix_ratio", "grid_search", "iter_search"]
+                Random.seed!(1234)
+                res = benchmarking_ss(method = "single_lambda", one_se_rule = one_se_rule, 
+                                        nλ = 2, # only for grid_search or iter_search
+                                        nk = 50 # only for fix_ratio
+                                    )
+                @test res[2] < res[4]
+            end
+        end
     end
 end
 
