@@ -553,7 +553,7 @@ end
         for one_se_rule in [false, true]
             for method in ["single_lambda", "fix_ratio", "grid_search", "iter_search"]
                 Random.seed!(1234)
-                res = benchmarking_ss(method = "single_lambda", one_se_rule = one_se_rule, 
+                res = benchmarking_ss(method = method, one_se_rule = one_se_rule, 
                                         nλ = 2, # only for grid_search or iter_search
                                         nk = 50 # only for fix_ratio
                                     )

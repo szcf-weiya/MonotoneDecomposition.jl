@@ -8,6 +8,8 @@ export gen_data,
        gen_kern,
        gp,
 
+       star_pval,
+
        mono_decomp,
 
        recover,
@@ -38,5 +40,4 @@ export gen_data,
        benchmarking,
        benchmarking_cs,
        benchmarking_ss
-
 end 

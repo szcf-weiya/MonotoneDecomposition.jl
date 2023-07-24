@@ -318,6 +318,7 @@ scatter!(x, ydown)
 ```
 """
 function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname = nothing, 
+                                                            verbose = true,
                                                             nfold = 10, 
                                                             tol = 1e-7,
                                                             x0 = x, # test point of x
@@ -339,21 +340,21 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
     end
     μrange = [1e-7, min(r*1.0, 1)]
     if method == "single_lambda"
-        @info "Smoothing Splines with fixed λ"
+        verbose && @info "Smoothing Splines with fixed λ"
         D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λ, figname = figname, nfold = nfold, tol = tol)
     elseif method == "fix_ratio"
-        @info "Smoothing Splines with fixratio strategy"
+        verbose && @info "Smoothing Splines with fixratio strategy"
         ks = range(0.05, 0.99, length = nk)
         D, μs, errs, σerrs = cvfit(x, y, ks, λ, figname = figname, nfold = nfold)
     elseif method == "iter_search" #88
-        @info "Smoothing Splines with iter-search: λ -> μ -> λ -> ... -> μ"
+        verbose && @info "Smoothing Splines with iter-search: λ -> μ -> λ -> ... -> μ"
         iter = 0
         λ0 = λ # make a backup
         seed = rand(UInt64)
         while true
             iter += 1
             ## tune mu given lambda
-            @info "tune mu given lambda = $λ"
+            @debug "tune mu given lambda = $λ"
             # D1, workspace1 = cvfit(x, y, μmax * r, [λ], nfold = nfold, figname = figname, nμ = nμ, ρ = ρ)
             ## if needed, perform one se rule on the last iteration given lambda
             D1, μs, errs, σerrs = cvfit_gss(x, y, μrange, λ, nfold = nfold, figname = figname, tol = tol, seed = seed)
@@ -368,7 +369,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                 break
             end
             ## re-tune lambda given mu
-            @info "tune lambda given mu = $(D1.μ)"
+            @debug "tune lambda given mu = $(D1.μ)"
             # D, workspace = cvfit(x, y, D1.μ, λ, nfold = nfold, figname = figname, nλ = nλ, ρ = ρ)
             D, _ = cvfit_gss(x, y, [1e-7, 1.5λ0], D1.μ, nfold = nfold, figname = figname, λ_is_μ = true, tol = tol, seed = seed)
             err_λ = abs(D.λ - D1.λ) / D.λ
@@ -380,14 +381,14 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         end
     else # grid_search
         λs = range(1-rλ, 1+rλ, length = nλ) .* λ
-        @info "Smoothing Splines with grid-search λ ∈ $λs, μ ∈ $μrange"
+        verbose && @info "Smoothing Splines with grid-search λ ∈ $λs, μ ∈ $μrange"
         seed = rand(UInt64)
         D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λs, nfold = nfold, figname = figname, seed = seed, tol = tol)
     end
     if one_se_rule
         ind = cv_one_se_rule(errs, σerrs, small_is_simple = false)
         μopt = μs[ind]
-        println("before 1se: μ = ", D.μ, "; after 1se: μ = ", μopt)
+        @debug "use 1se rule: before 1se: μ = $(D.μ); after 1se: μ = $μopt"
         D = mono_decomp_ss(D.workspace, x, y, D.λ, μopt)
     end
     return D, μs[argmin(errs)], μs, errs, σerrs, yhat, yhatnew
@@ -406,14 +407,16 @@ function benchmarking_cs(n::Int = 100, σ::Float64 = 0.5, f::Union{Function, Str
                                                                                figname_cv = nothing,
                                                                                figname_fit = nothing,
                                                                                Js = 4:20,
+                                                                               nfold = 10,
+                                                                               one_se_rule = false,
                                                                                μs = 10.0 .^ (-6:0.5:0))
     x, y, x0, y0 = gen_data(n, σ, f)
     # J is determined from cubic_spline (deprecated the choice of arbitrary J)
-    J, yhat, yhatnew = cv_cubic_spline(x, y, x0)
+    J, yhat, yhatnew = cv_cubic_spline(x, y, x0, nfold = nfold, one_se_rule = one_se_rule)
     if fixJ
         Js = J:J
     end
-    D, _ = cv_mono_decomp_cs(x, y, x0, Js = Js, ss = μs, figname = figname_cv)
+    D, _ = cv_mono_decomp_cs(x, y, x0, Js = Js, ss = μs, figname = figname_cv, nfold = nfold, one_se_rule = one_se_rule)
     err = [norm(D.yhat - y)^2 / length(y), norm(predict(D, x0) - y0)^2 / length(y0), 
            norm(yhat - y)^2 / length(y), norm(yhatnew - y0)^2 / length(y0),
            var(y), var(y0)]
@@ -459,7 +462,7 @@ end
     if `nλ = 1`, then fixed λ; otherwise, there are two choices: ss_grid, ss_iter
 
 """
-function benchmarking(f::Union{Function, String} = x->x^3; n = 100, σs = 0.2:0.2:1,
+function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                             J = 10, 
                             μs = 10.0 .^ (-6:0.5:0), ## bspl
                             jplot = false, nrep = 100,
@@ -467,13 +470,13 @@ function benchmarking(f::Union{Function, String} = x->x^3; n = 100, σs = 0.2:0.
                             nfold = 5, one_se_rule = true,
                             resfolder = "/tmp",
                             ind = 1:4,
-                            title = "", kw...)
+                            nλ = 20, kw...)
+    @info "Benchmarking $f with $nrep repetitions"
+    title = "$f (nrep = $nrep)"
+    filename = "$f.sil"
     nσ = length(σs)
     res = zeros(nrep, 6, nσ)
     # res = SharedArray{Float64}(nrep, 4, nσ)
-    if isa(f, String)
-        title = f
-    end
     if f == "x^3"
         f = x -> x^3
     elseif f == "x^2"
@@ -483,8 +486,6 @@ function benchmarking(f::Union{Function, String} = x->x^3; n = 100, σs = 0.2:0.
     elseif f == "sigmoid"
         f = x -> 1 / (1 + exp(-5x))
     end
-    title *= " (nrep = $nrep)"
-    filename = replace(title, " "=>"_") * "sig$σs-$competitor.sil"
     # @sync @distributed for i = 1:nrep
     for i = 1:nrep
         @showprogress "iter = $i: " for (j, σ) in enumerate(σs)
@@ -494,11 +495,14 @@ function benchmarking(f::Union{Function, String} = x->x^3; n = 100, σs = 0.2:0.
                 res[i, :, j] = benchmarking_ss(n, σ, f; figname_cv = figname_cv, 
                                                         figname_fit = figname_fit,
                                                         nfold = nfold,
+                                                        nλ = nλ,
+                                                        one_se_rule = one_se_rule,
                                                         method = competitor[4:end], kw...)
             else
                 res[i, :, j] = benchmarking_cs(n, σ, f; figname_cv = figname_cv, 
                                                         figname_fit = figname_fit,
                                                         μs = μs, 
+                                                        one_se_rule = one_se_rule,
                                                         fixJ = !occursin("cvbspl2", competitor), kw...)
             end
         end
@@ -522,27 +526,48 @@ function benchmarking(f::Union{Function, String} = x->x^3; n = 100, σs = 0.2:0.
     end
 end
 
-function summary(nλ = 20, timestamp = "", format = "figure", 
+function summary(;nλ = 20, 
+                    format = "figure", 
                     methodnames = ["SmoothSpline", "MonoDecomp"], # CubicSpline
-                    σs = 0.2:0.2:2.0,
-                    nrep = 100, ind = 1:4
+                    # σs = 0.2:0.2:2.0,
+                    σs = [0.1, 0.2, 0.4, 0.5, 1.0, 1.5, 2.0],
+                    nrep = 100, ind = 1:4,
+                    resfolder = "/tmp" #"../res/res_monodecomp/rocky/"
                     )
     # res = deserialize("../res/res_monodecomp/rocky/x^3_(nrep_=_100)sig0.2:0.2:2.0-s0.05:0.05:1.0-nlam1-rlam0.5.sil")
     # titles = ["x^3", "exp(x)", "SE_1", "SE_0.1", "MLP1_10"]
     # titles = ["SE_1", "SE_0.1", "MLP1_10", "Mat12_1", "Mat12_0.1", "Mat32_1", "Mat32_0.1", "RQ_0.1_0.5", "Periodic_0.1_4"]
-    titles = ["x^2" "x^3" "exp(x)" "sigmoid" "SE_1" "SE_0.1" "Mat12_1" "Mat12_0.1" "Mat32_1" "Mat32_0.1" "RQ_0.1_0.5" "Periodic_0.1_4"]
+    titles = ["x^2" "x^3" "exp(x)" "sigmoid" "SE_1" "SE_0.1" "Mat12_1" "Mat12_0.1" "Mat32_1" "Mat32_0.1" "RQ_0.1_0.5" "Periodic_0.1_4"][1:2]
     # titles to display
     dtitles = copy(titles)
-    dtitles[1:3] = [L"x^2" L"x^3" L"\exp(x)"]
+    if length(titles) > 2
+        dtitles[1:3] = [L"x^2" L"x^3" L"\exp(x)"]
+    end
     ntitle = length(titles)
-    filename = replace(timestamp, ":" => "_")
-    println(filename)
+    if endswith(resfolder, "/")
+        filename = basename(resfolder[1:end-1])
+        resfolder0 = dirname(resfolder[1:end-1])
+    else
+        filename = basename(resfolder)
+        resfolder0 = dirname(resfolder)
+    end
+    try
+        # get parameters from filename
+        list_paras = split(filename, "-")
+        inrep = findfirst(startswith.(list_paras, "nrep"))
+        inlam = findfirst(startswith.(list_paras, "nlam"))
+        nrep = parse(Int, split(list_paras[inrep], "nrep")[2])
+        nλ = parse(Int, split(list_paras[inlam], "nlam")[2])
+    catch e
+        @warn "cannot parse nλ and nrep from resfolder, use default nλ=$nλ, nrep=$nrep"
+    end
     if format == "figure"
         figs = Plots.Plot[]
         for (i, title) in enumerate(titles)
-            resfile = "$(title)_(nrep_=_$nrep)sig$(σs)-nlam$nλ-rlam0.5.sil"
+            # resfile = "$(title)_(nrep_=_$nrep)sig$(σs)-nlam$nλ-rlam0.5.sil"
+            resfile = "$title.sil"
             # resfile = "$(title)_(nrep_=_100)sig0.2:0.2:2.0-s0.05:0.05:1.0-nlam$nλ-rlam0.5.sil"
-            res = deserialize("../res/res_monodecomp/rocky/$timestamp/$resfile")
+            res = deserialize(joinpath(resfolder, resfile))
             μerr = mean(res, dims = 1)[1, :, :]
             σerr = std(res, dims = 1)[1, :, :] / sqrt(nrep)
             # title = titles[i]
@@ -593,8 +618,8 @@ function summary(nλ = 20, timestamp = "", format = "figure",
             # ind = [1, 2, 4, 5, 6, 7]
         end
         for (i, title) in enumerate(titles)
-            resfile = "$(title)_(nrep_=_$nrep)sig$σs-nlam$nλ-rlam0.5.sil"
-            res = deserialize("../res/res_monodecomp/rocky/$timestamp/$resfile")
+            resfile = "$(title).sil"
+            res = deserialize(joinpath(resfolder, resfile))
             # the order should be consistent with the colnames
             # res[:, 3, :] = #max.(1 .- res[:, 3, :] ./ res[:, 5, :], 0) # R^2
             # res[:, 3, :] = max.(res[:, 5, :] ./ res[:, 3, :] .- 1, 0)# SNR
@@ -633,7 +658,7 @@ function summary(nλ = 20, timestamp = "", format = "figure",
             right_cols = [pvals, props],
             right_col_names = ["p-value", "prop."], 
             right_align = "l", # it might be slightly worse for other columns, but center is not good for the pvalue column TODO: improve the style
-            colnames_of_rownames = ["curve", L"\sigma"], file = "../res/res_monodecomp/$filename.tex", isbf = isbf)
+            colnames_of_rownames = ["curve", L"\sigma"], file = joinpath(resfolder0, "$filename.tex"), isbf = isbf)
     end
 end
 
@@ -1484,7 +1509,7 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
         print("search μ in ")
     else
         # println("search μ in ", [a, b])
-        @info "search μ in $([a, b])"
+        @debug "search μ in $([a, b])"
     end
     while true
         verbose && print([a, b], " ")
@@ -1522,14 +1547,14 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
             end
             if flag
                 # @warn "the optimal points near the right boundary"
-                @info "the optimal points near the right boundary, try to extend the range..." # since in the log file the warn message is before other print message
+                @debug "the optimal points near the right boundary, try to extend the range..." # since in the log file the warn message is before other print message
                 # since 0.75 < 1 - 1e-2, so it is ok
                 left_new = μrange[1] + 0.75 * (μrange[2] - μrange[1])
                 right_new = μrange[2] * 2
                 return cvfit_gss(x, y, [left_new, right_new], λ, figname = figname, nfold = nfold, seed = seed, λ_is_μ = λ_is_μ, tol = tol)
             end
             ind = sortperm(μs)
-            @info "optimal μ = $(μs[end])" 
+            verbose && @info "optimal μ = $(μs[end])" 
             if !isnothing(figname)
                 savefig(plot(log.(μs[ind]), errs[ind], yerrors = σerrs[ind]), "/tmp/cv.png")
                 # savefig(scatter(log.(μs), errs), "/tmp/cv.png")
