@@ -529,17 +529,15 @@ function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
 end
 
 function summary(;nλ = 20, 
-                    format = "figure", 
+                    format = "tex", 
                     methodnames = ["SmoothSpline", "MonoDecomp"], # CubicSpline
                     # σs = 0.2:0.2:2.0,
                     σs = [0.1, 0.2, 0.4, 0.5, 1.0, 1.5, 2.0],
                     nrep = 100, ind = 1:4,
+                    curves = ["x^2" "x^3" "exp(x)" "sigmoid" "SE_1" "SE_0.1" "Mat12_1" "Mat12_0.1" "Mat32_1" "Mat32_0.1" "RQ_0.1_0.5" "Periodic_0.1_4"],
                     resfolder = "/tmp" #"../res/res_monodecomp/rocky/"
                     )
-    # res = deserialize("../res/res_monodecomp/rocky/x^3_(nrep_=_100)sig0.2:0.2:2.0-s0.05:0.05:1.0-nlam1-rlam0.5.sil")
-    # titles = ["x^3", "exp(x)", "SE_1", "SE_0.1", "MLP1_10"]
-    # titles = ["SE_1", "SE_0.1", "MLP1_10", "Mat12_1", "Mat12_0.1", "Mat32_1", "Mat32_0.1", "RQ_0.1_0.5", "Periodic_0.1_4"]
-    titles = ["x^2" "x^3" "exp(x)" "sigmoid" "SE_1" "SE_0.1" "Mat12_1" "Mat12_0.1" "Mat32_1" "Mat32_0.1" "RQ_0.1_0.5" "Periodic_0.1_4"][1:2]
+    titles = curves
     # titles to display
     dtitles = copy(titles)
     if length(titles) > 2
@@ -547,7 +545,10 @@ function summary(;nλ = 20,
     end
     ntitle = length(titles)
     @info "summarize result $resfolder in $format format"
-    if endswith(resfolder, "/")
+    if resfolder == "/tmp"
+        filename = "tmp"
+        resfolder0 = resfolder    
+    elseif endswith(resfolder, "/")
         filename = basename(resfolder[1:end-1])
         resfolder0 = dirname(resfolder[1:end-1])
     else
@@ -565,6 +566,8 @@ function summary(;nλ = 20,
         @warn "cannot parse nλ and nrep from resfolder, use default nλ=$nλ, nrep=$nrep"
     end
     if format == "figure"
+        @warn "Figure is less accurate and hence deprecated. Use table instead. See Figure examples https://github.com/szcf-weiya/Clouds/issues/80#issuecomment-1025306738"
+        #=
         figs = Plots.Plot[]
         for (i, title) in enumerate(titles)
             # resfile = "$(title)_(nrep_=_$nrep)sig$(σs)-nlam$nλ-rlam0.5.sil"
@@ -595,6 +598,7 @@ function summary(;nλ = 20,
         else
             save_grid_plots(figs)
         end
+        =#
     else
         # TODO: is it necessary?
         μerrs = Array{AbstractMatrix{Float64}}(undef, ntitle)

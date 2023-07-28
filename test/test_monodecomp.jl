@@ -540,9 +540,15 @@ end
 
 @testset "benchmarking experiments" begin
     benchmarking(jplot = false, nrep=1, σs = [0.1], competitor = "ss_single_lambda", nfold = 2, one_se_rule=false, resfolder = "/tmp")
+    MonotoneDecomposition.summary(σs=[0.1], curves=["x^3"], nrep=1, resfolder = "/tmp")
+    @test isfile("/tmp/tmp.tex")
     @testset "cubic splines" begin
         Random.seed!(1234)
         res = benchmarking_cs(fixJ = false, figname_cv="/tmp/cv.png", figname_fit="/tmp/fit.png")
+        @test isfile("/tmp/cv_Jmu.sil")
+        savefig(cvplot("/tmp/cv_Jmu.sil", "bspl2"), "/tmp/cv2.png")
+        @test isfile("/tmp/cv2.png")
+        
         @test res[2] < res[4]
         
         Random.seed!(1234)

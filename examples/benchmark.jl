@@ -1,5 +1,4 @@
 # Benchmarking
-using Distributed
 using MonotoneDecomposition
 
 # Candidate functions
@@ -61,5 +60,9 @@ benchmarking(
 #     JULIA_DEBUG=MonotoneDecomposition julia examples/benchmark.jl ss_single_lambda /tmp 2 1 2 false
 #     ```
 
-# summary the results
-## MonotoneDecomposition.summary(resfolder = resfolder, format = "tex")
+
+# !!! tip "summary results"
+#     After obtaining results, we can obtain the summarized tex file (used in the manuscript) as follows.
+#     ```julia
+#     MonotoneDecomposition.summary(resfolder = resfolder)
+#     ```
