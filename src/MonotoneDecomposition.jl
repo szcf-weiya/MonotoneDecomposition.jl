@@ -3,6 +3,7 @@ module MonotoneDecomposition
 include("utils.jl")
 include("genfunc.jl")
 include("mono_decomp.jl")
+include("mono_test.jl")
 
 export gen_data,
        gen_kern,
@@ -39,5 +40,10 @@ export gen_data,
        
        benchmarking,
        benchmarking_cs,
-       benchmarking_ss
+       benchmarking_ss,
+
+       single_test_compare_bowman,
+       single_test_compare_ghosal,
+       single_test_compare_mono,
+       single_test_compare_desc
 end 
