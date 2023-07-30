@@ -1,17 +1,28 @@
-function to_run()
-    res = pmap(x->single_test(), 1:100)
-    res = pmap(x->single_test_compare_bowman(), 1:100)
-    res2 = pmap(x->single_test_compare_ghosal(), 1:100)
+using Distributed
+@everywhere using MonotoneDecomposition
 
-    res_mono = pmap(x->single_test_compare_mono(), 1:100)
-
-    res2 = pmap(x->single_test_bootstrap(), 1:100)
-    pres2 = [res2[i] .< 0.05 for i=1:length(res2)]
-    # mean(res2 .< 0.05)[:, 1, :] # cannot work
-    mean(pres2)[:, 1, :]
-    mean(res2)[:, 1, :]
+function postfix()
+    timestamp = replace(strip(read(`date -Iseconds`, String)), ":" => "_")
+    ## get current (if modified are not saved, parent) commit
+    pcommit = strip(read(`git log --format="%h" -1`, String))
+    return "$(pcommit)_$timestamp"    
 end
 
+function experiment_control_typeI_error(; resfolder = "/tmp" # "../res/mono_test/"
+                                        )
+    res = pmap(x->single_test_compare_mono(), 1:100)
+    serialize(joinpath(resfolder, "res_mono_test_mono_sup_$(postfix()).sil"), res)
+end
+
+function experiment_bowman_example(; resfolder = "/tmp")
+    res = pmap(x->single_test_compare_bowman(), 1:100)
+    serialize(joinpath(resfolder, "res_mono_test_bowman_sup_$(postfix()).sil"), res)
+end
+
+function experiment_ghosal_example(; resfolder = "/tmp")
+    res = pmap(x->single_test_compare_ghosal(), 1:100) 
+    serialize(joinpath(resfolder, "res_mono_test_ghosal_sup_$(postfix()).sil"), res)   
+end
 
 function summary_res()
     res = deserialize("../res/mono_test/res_mono_test_bowman.sil")
@@ -58,13 +69,16 @@ function summary_res4x5_3()
     print2tex(A2, ["v1: MD (CS)", "v1: MD (SS)", "v2: MD (CS)", "v2: MD (SS)", "Meyer", "Ghosal", "Bowman"], ["n = 200"], subcolnames = "m" .* string.(1:4), subrownames = string.([0.001, 0.01,0.1]), colnames_of_rownames = ["Methods", "noise"], file = "res_mono_test_ghosal_0511v2_1se.tex", format = "raw")
 end
 
+## before the commit https://github.com/szcf-weiya/Clouds/commit/81ab460a6932c3e294b36b650093987a9776bff3#diff-d3b2f4590eb36d701d869fb64569fce96d45c5a4ca6f2750eff89ee6066798f4
+## where the results for _sup and _supss become 3-vector instead of 2-vector
 function summary_res_sup()
-    res = deserialize("../res/mono_test/res_mono_test_bowman_sup7.sil")
-    res2 = deserialize("../res/mono_test/res_mono_test_ghosal_sup7.sil")
-    res3 = deserialize("../res/mono_test/res_mono_test_mono_sup.sil")
+    resfolder = "../res/mono_test"
+    res = deserialize(joinpath(resfolder, "res_mono_test_bowman_sup7.sil"))
+    res2 = deserialize(joinpath(resfolder, "res_mono_test_ghosal_sup7.sil"))
+    res3 = deserialize(joinpath(resfolder, "res_mono_test_mono_sup.sil"))
 
-    res = deserialize("../res/mono_test/res_mono_test_bowman_sup7_500.sil")
-    res2 = deserialize("../res/mono_test/res_mono_test_ghosal_sup7_500.sil")
+    # res = deserialize("../res/mono_test/res_mono_test_bowman_sup7_500.sil")
+    # res2 = deserialize("../res/mono_test/res_mono_test_ghosal_sup7_500.sil")
 
     μ = mean(res) # 4 x 3 x 3 x 7
     μ2 = mean(res2) # 3 x 3 x 4 x 7
