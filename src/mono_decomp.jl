@@ -140,7 +140,7 @@ function mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T};
     if s_is_μ
         γhat = _optim(y, workspace, [s])[:]
     else
-        γhat = _optim(y, workspace.J, workspace.B, s, workspace.H, std_by_norm = false)
+        γhat = _optim(y, workspace.J, workspace.B, s, workspace.H)
     end
     γup = γhat[1:J]
     γdown = γhat[J+1:2J]
@@ -326,19 +326,17 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             nk = 20, #used in fix_ratio
                                                             nλ = 10, rλ = 0.5, # used in grid_search
                                                             rel_tol = 1e-1, maxiter = 10, # iter_search
+                                                            k_magnitude = 2,
                                                             one_se_rule = false, kw...) where T <: AbstractFloat
     yhat, yhatnew, Ω, λ, spl, B = smooth_spline(x, y, x0, design_matrix = true, keep_stuff = true)
     γup, γdown = mono_decomp(rcopy(R"$spl$fit$coef"))
     s0 = norm(B * (γup .- γdown))
-    r = λ * (γup .+ γdown)' * Ω * (γup .+ γdown) / s0^2
-    if r < 0
-        # r = cbrt(eps())
-        r = 1e-2
-    end
-    if one_se_rule # search in relatively large region
-        r = min(10000r, 1.0)
-    end
-    μrange = [1e-7, min(r*1.0, 1)]
+    s_residual = norm(y - yhat)^2
+    s_smoothness = λ * (γup .+ γdown)' * Ω * (γup .+ γdown)
+    s_discrepancy = [max(eps(), min(s_residual, s_smoothness)) / 10^k_magnitude, 
+                                max(s_residual, s_smoothness) * 10^k_magnitude]
+    μrange = s_discrepancy / s0^2
+    verbose && @info "μrange: $μrange"
     if method == "single_lambda"
         verbose && @info "Smoothing Splines with fixed λ"
         D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λ, figname = figname, nfold = nfold, tol = tol)
@@ -732,16 +730,16 @@ end
         status = termination_status(model)
         i = 1
         if status == MOI.NUMERICAL_ERROR
-            @warn "$status"
+            @warn "$status when λ=$λ, μ=$μ: use constant half mean as its estimate"
             γhats[:, i] .= mean(y) / 2
         else
             if !(status in [MOI.OPTIMAL, MOI.ALMOST_OPTIMAL])
-                @warn "$status"
+                @warn "$status when λ=$λ, μ=$μ: direct take the solution"
             end
             try
-                γhats[:, i] .= value.(γ)
+                γhats[:, i] .= value.(γ) # ITERATION_LIMIT
             catch
-                @warn "no solution, $status"
+                @warn "when λ=$λ, μ=$μ: no solution, $status"
                 ts = strip(read(`date -Iseconds`, String))
                 serialize("bug_$(ts).sil", [y, J, B, H, L, λs, μs, i, status])
                 γhats[:, i] .= mean(y) / 2
@@ -815,7 +813,7 @@ end
     return γhats
 end
 
-function _optim!(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T}, s::Union{Nothing, Real}, γhat::AbstractVector{T}, H::AbstractMatrix{Int}; L = nothing, t = nothing, λ = nothing, μ = nothing, std_by_norm = true, BarHomogeneous = false) where T <: AbstractFloat
+function _optim!(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T}, s::Union{Nothing, Real}, γhat::AbstractVector{T}, H::AbstractMatrix{Int}; L = nothing, t = nothing, λ = nothing, μ = nothing, BarHomogeneous = false) where T <: AbstractFloat
     # construct constraint ‖ B(γ^u - γ^d) ‖ < s
     # model = Model(GLPK.Optimizer) # cannot do second order, throw error
     # `MOI.VectorAffineFunction{Float64}`-in-`MOI.SecondOrderCone` constraints are not supported and cannot be bridged into supported constrained variables and constraints. See details below:
@@ -829,13 +827,13 @@ function _optim!(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T}, s::Union{No
     @constraint(model, c1, H * γ .<= 0)
     if isnothing(μ)
         # @constraint(model, c2, norm(B * (γ[1:J] - γ[J+1:2J]) ) <= s)
-        @constraint(model, c2, [s; B / ifelse(std_by_norm, norm(B), 1) * (γ[1:J] - γ[J+1:2J])] in SecondOrderCone()  )
+        @constraint(model, c2, [s; B * (γ[1:J] - γ[J+1:2J])] in SecondOrderCone()  )
         # @objective(model, Min, norm(y - B * (γ[1:J] + γ[J+1:2J]) ))
         # cannot directly use norm
         if isnothing(λ)
             @constraint(model, c3, [z; y - B * (γ[1:J] + γ[J+1:2J])] in SecondOrderCone() )
             if !isnothing(t)
-                @constraint(model, c4, [t; L' / ifelse(std_by_norm, norm(L), 1) * (γ[1:J] + γ[J+1:2J])] in SecondOrderCone() )
+                @constraint(model, c4, [t; L' * (γ[1:J] + γ[J+1:2J])] in SecondOrderCone() )
             end
         else
             @constraint(model, c3, [z; vcat(y - B * (γ[1:J] + γ[J+1:2J]), sqrt(λ) * L' * (γ[1:J] + γ[J+1:2J])) ] in SecondOrderCone() )
@@ -861,7 +859,7 @@ function _optim!(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T}, s::Union{No
     if status == MOI.NUMERICAL_ERROR
         if !BarHomogeneous # not yet try BarHomogeneous
             @info "try BarHomogeneous to rerun NUMERICAL_ERROR"
-            _optim!(y, J, B, s, γhat, H, L = L, t = t, λ = λ, μ = μ, std_by_norm = std_by_norm, BarHomogeneous = true)
+            _optim!(y, J, B, s, γhat, H, L = L, t = t, λ = λ, μ = μ, BarHomogeneous = true)
         else
             @warn "$status after trying BarHomogeneous algorithm"
             γhat .= mean(y) / 2
@@ -935,9 +933,9 @@ Monotone decomposition with smoothing splines.
 function mono_decomp_ss(workspace::WorkSpaceSS, x::AbstractVector{T}, y::AbstractVector{T}, λ::AbstractFloat, s::AbstractFloat; s_is_μ = true) where T <: AbstractFloat
     build_model!(workspace, x)
     if s_is_μ
-        γhat = _optim(y, workspace.J, workspace.B, nothing, workspace.H, L = workspace.L, t = nothing, λ = λ, std_by_norm = false, μ = s)
+        γhat = _optim(y, workspace.J, workspace.B, nothing, workspace.H, L = workspace.L, t = nothing, λ = λ, μ = s)
     else
-        γhat = _optim(y, workspace.J, workspace.B, s, workspace.H, L = workspace.L, t = nothing, λ = λ, std_by_norm = false)
+        γhat = _optim(y, workspace.J, workspace.B, s, workspace.H, L = workspace.L, t = nothing, λ = λ)
     end
     # calculate properties of monotone decomposition
     J = workspace.J
