@@ -10,6 +10,11 @@ end
 
 @testset "ghosal constant" begin
     @test MonotoneDecomposition.ghosal_λ() ≈ 9.974576271186443 atol=1e-5
+    c = MonotoneDecomposition.ghosal_critical_value()
+    @test c[50] ≈ 3.03412 atol=1e-5
+    @test c[100] ≈ 3.05099 atol=1e-5
+    @test c[200] ≈ 3.07254 atol=1e-5
+    @test c[500] ≈ 3.10625 atol=1e-5
 end
 
 @testset "experiments" begin

@@ -1,5 +1,6 @@
-using Distributed
-@everywhere using MonotoneDecomposition
+using Distributed # not necessary when calling with `-p n` option
+using LaTeXStrings
+using MonotoneDecomposition
 
 function postfix()
     timestamp = replace(strip(read(`date -Iseconds`, String)), ":" => "_")

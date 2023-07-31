@@ -147,27 +147,7 @@ function ghosal_S1n(X, Y, c, a = 0.05, b = 0.95, α = 0.05)
     return S1n > c
 end
 
-function single_ghosal(c, n = 100)
-    xs, m1, m2, m3, m4 = gen_data_ghosal(n = n)
-    return [ghosal_S1n(xs, m, c) for m in [m1, m2, m3, m4] ]
-end
-
-function ghosal(;n = 100, nrep = 100, a = 0.05, b = 0.95, α = 0.05)
-    res = zeros(nrep, 4)
-    # critical value
-    hn = 0.5 * n^(-1/5)
-    c1 = sqrt(2log((b-a)/hn))
-    c2 = log(-log(1-α)) - log(sqrt(LAMBDA) / 2π)
-    c = c1 - c2 / c1
-    println("n = $n, bw = $hn, critical value = $c")
-    res = pmap(x->single_ghosal(c, n), 1:nrep)
-    # for i = 1:nrep
-    #     xs, m1, m2, m3, m4 = gen_data_ghosal(n = n)
-    #     res[i, :] = [ghosal_S1n(xs, m, c) for m in [m1, m2, m3, m4] ]
-    # end
-    return mean(hcat(res...), dims=2)
-    # return mean(res, dims = 1)
-end
+ghosal(x::AbstractVector{T}, y::AbstractVector{T}) where T <: Real = ghosal_S1n(x, y, C_GHOSAL[length(x)])
 
 function meyer(x::AbstractVector{T}, y::AbstractVector{T}, nsim = 100, k = 6) where T <: Real
     meyer_rfile = joinpath(@__DIR__, "testmonotonicity.R")
@@ -218,7 +198,7 @@ function single_test_compare_bowman(;
                 # props[j, k, l, 22] = ghosal_S1n(x, y, C_GHOSAL[n])
                 # props[j, k, l, 23] = bowman(x, y)
                 props[j, k, l, 1] = meyer(x, y)
-                props[j, k, l, 2] = ghosal_S1n(x, y, C_GHOSAL[n])
+                props[j, k, l, 2] = ghosal(x, y)
                 props[j, k, l, 3] = bowman(x, y)
                 props[j, k, l, 4:6] .= mono_test_bootstrap_sup(x, y, nrep = nrep, nμ = 5)
                 props[j, k, l, 7:9] .= mono_test_bootstrap_supss(x, y, nrep = nrep, nμ = 5)
@@ -255,7 +235,7 @@ function single_test_compare_ghosal(;
                 # props[i, k, j, 24] = mono_test_bootstrap_sup(x, y)
                 # props[i, k, j, 25] = mono_test_bootstrap_supss(x, y)
                 props[i, k, j, 1] = meyer(x, y)
-                props[i, k, j, 2] = ghosal_S1n(x, y, C_GHOSAL[n])
+                props[i, k, j, 2] = ghosal(x, y)
                 props[i, k, j, 3] = bowman(x, y)
                 props[i, k, j, 4:6] .= mono_test_bootstrap_sup(x, y, nrep = nrep, nμ = 5)
                 props[i, k, j, 7:9] .= mono_test_bootstrap_supss(x, y, nrep = nrep, nμ = 5)
@@ -285,7 +265,7 @@ function single_test_compare_desc(;
                 props[i, k, j, 7:9] = mono_test_bootstrap(x, y, data_obey_H0 = true, nrep = nrep)[1:3]
                 props[i, k, j, 10:12] = mono_test_bootstrap_ss(x, y, data_obey_H0 = true, nrep = nrep)[1:3]
                 props[i, k, j, 13] = meyer(x, y)
-                props[i, k, j, 14] = ghosal_S1n(x, y, C_GHOSAL[n])
+                props[i, k, j, 14] = ghosal(x, y)
                 props[i, k, j, 15] = bowman(x, y)
             end
         end
@@ -316,7 +296,7 @@ function single_test_compare_mono(;
                 # props[i, k, j, 22] = ghosal_S1n(x, y, C_GHOSAL[n])
                 # props[i, k, j, 23] = bowman(x, y)
                 props[i, k, j, 1] = meyer(x, y)
-                props[i, k, j, 2] = ghosal_S1n(x, y, C_GHOSAL[n])
+                props[i, k, j, 2] = ghosal(x, y)
                 props[i, k, j, 3] = bowman(x, y)
                 props[i, k, j, 4:6] .= mono_test_bootstrap_sup(x, y, nrep = nrep, nμ = 5)
                 props[i, k, j, 7:9] .= mono_test_bootstrap_supss(x, y, nrep = nrep, nμ = 5)
