@@ -730,16 +730,16 @@ end
         status = termination_status(model)
         i = 1
         if status == MOI.NUMERICAL_ERROR
-            @warn "$status when λ=$λ, μ=$μ: use constant half mean as its estimate"
+            @debug "$status when λ=$λ, μ=$μ: use constant half mean as its estimate"
             γhats[:, i] .= mean(y) / 2
         else
             if !(status in [MOI.OPTIMAL, MOI.ALMOST_OPTIMAL])
-                @warn "$status when λ=$λ, μ=$μ: direct take the solution"
+                @debug "$status when λ=$λ, μ=$μ: direct take the solution"
             end
             try
                 γhats[:, i] .= value.(γ) # ITERATION_LIMIT
             catch
-                @warn "when λ=$λ, μ=$μ: no solution, $status"
+                @debug "when λ=$λ, μ=$μ: no solution, $status"
                 ts = strip(read(`date -Iseconds`, String))
                 serialize("bug_$(ts).sil", [y, J, B, H, L, λs, μs, i, status])
                 γhats[:, i] .= mean(y) / 2
@@ -763,11 +763,11 @@ end
             # obj_val = objective_value(model)
             # println("i = $i, obj_val = $obj_val")
             if status == MOI.NUMERICAL_ERROR
-                @warn "$status"
+                @debug "$status"
                 γhats[:, i] .= mean(y) / 2
             else
                 if !(status in [MOI.OPTIMAL, MOI.ALMOST_OPTIMAL])
-                    @warn "$status"
+                    @debug "$status"
                 end
                 try
                     γhats[:, i] .= value.(γ)
@@ -796,11 +796,11 @@ end
             obj_val = objective_value(model)
             # println("i = $i, obj_val = $obj_val")
             if status == MOI.NUMERICAL_ERROR
-                @warn "$status"
+                @debug "$status"
                 γhats[:, i] .= mean(y) / 2
             else
                 if !(status in [MOI.OPTIMAL, MOI.ALMOST_OPTIMAL])
-                    @warn "$status"
+                    @debug "$status"
                 end
                 γhats[:, i] .= value.(γ)
             end
@@ -858,15 +858,15 @@ function _optim!(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T}, s::Union{No
     # end debug
     if status == MOI.NUMERICAL_ERROR
         if !BarHomogeneous # not yet try BarHomogeneous
-            @info "try BarHomogeneous to rerun NUMERICAL_ERROR"
+            @debug "try BarHomogeneous to rerun NUMERICAL_ERROR"
             _optim!(y, J, B, s, γhat, H, L = L, t = t, λ = λ, μ = μ, BarHomogeneous = true)
         else
-            @warn "$status after trying BarHomogeneous algorithm"
+            @debug "$status after trying BarHomogeneous algorithm"
             γhat .= mean(y) / 2
         end
     else
         if !(status in [MOI.OPTIMAL, MOI.ALMOST_OPTIMAL])
-            @warn "$status"
+            @debug "$status"
         end
         try
             γhat .= value.(γ)
@@ -910,9 +910,10 @@ function build_model!(workspace::WorkSpaceSS, x::AbstractVector{T}; ε = (eps())
         try
             workspace.L = Matrix(cholesky(Symmetric(Ω)).L)
         catch e
-            @warn e
+            @debug "$e: standard cholesky failed, use pivoted cholesky"
             ## perform pivoted Cholesky
-            workspace.L = Matrix(cholesky(Symmetric(Ω), Val(true), check = false, tol = ε).L)
+            chol = cholesky(Symmetric(Ω), Val(true), check = false)
+            workspace.L = chol.L[invperm(chol.p), 1:chol.rank]
         end
         # cannot update workspace in the argument
         workspace.evaluated = true
@@ -1158,9 +1159,8 @@ function cv_one_se_rule_deprecated(μs::AbstractMatrix{T}, σs::AbstractMatrix{T
     iopt2 = cv_one_se_rule(μs[:,jopt], σs[:,jopt], small_is_simple = small_is_simple[1])
     jopt2 = cv_one_se_rule(μs[iopt2,:], σs[iopt2,:], small_is_simple = small_is_simple[2])
     
-    if verbose
-        println("without 1se rule: iopt = $iopt, jopt = $jopt")
-    end
+    @debug "without 1se rule: iopt = $iopt, jopt = $jopt"
+
     # determine the minimum one
     if iopt1 + jopt1 < iopt2 + jopt2
         if μs[iopt1, jopt1] < μs[iopt2, jopt2] + σs[iopt2, jopt2]
@@ -1177,16 +1177,14 @@ function cv_one_se_rule_deprecated(μs::AbstractMatrix{T}, σs::AbstractMatrix{T
     end
 end
 
-function cv_one_se_rule(μs::AbstractMatrix{T}, σs::AbstractMatrix{T}; verbose = true, small_is_simple = [true, true]) where T <: AbstractFloat
+function cv_one_se_rule(μs::AbstractMatrix{T}, σs::AbstractMatrix{T}; small_is_simple = [true, true]) where T <: AbstractFloat
     ind = argmin(μs)
     iopt, jopt = ind[1], ind[2]
     jopt1 = cv_one_se_rule(μs[iopt,:], σs[iopt,:], small_is_simple = small_is_simple[2])
 
     iopt1 = cv_one_se_rule(μs[:,jopt], σs[:,jopt], small_is_simple = small_is_simple[1])
 
-    if verbose
-        println("without 1se rule: iopt = $iopt, jopt = $jopt")
-    end
+    @debug "without 1se rule: iopt = $iopt, jopt = $jopt"
     # determine the minimum one: compare (iopt1, jopt) vs (iopt, jopt1), take the larger one since both are in 1se
     if μs[iopt1, jopt] < μs[iopt, jopt1]
         return iopt, jopt1
@@ -1500,7 +1498,7 @@ Cross-validation by Golden Section Searching `μ`` in `μrange` given `λ`.
 - If `λ_is_μ`, search `λ` in `μrange` given `λ (μ)`
 - Note that `one_se_rule` is not suitable for the golden section search.
 """
-function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λ::Real; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), tol = 1e-7, λ_is_μ = false, verbose = false) where T <: AbstractFloat
+function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λ::Real; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), tol = 1e-7, λ_is_μ = false) where T <: AbstractFloat
     τ = (sqrt(5) + 1) / 2
     μs = Float64[]
     errs = Float64[]
@@ -1510,14 +1508,11 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
     c = a
     d = b
     tol = tol * max(1.0, b - a)
-    if verbose
-        print("search μ in ")
-    else
-        # println("search μ in ", [a, b])
-        @debug "search μ in $([a, b])"
-    end
+    @debug "search μ in $([a, b])"
+    iter = 0
     while true
-        verbose && print([a, b], " ")
+        iter += 1
+        iter % 10 == 0 && @debug "iter = $iter: narrow μ into $([a, b])"
         c = b - (b - a) / τ
         d = a + (b - a) / τ
         if λ_is_μ
@@ -1544,7 +1539,6 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
         c = b - (b - a) / τ
         d = a + (b - a) / τ
         if abs(b - a) < tol
-            verbose && println("") # new line
             if λ_is_μ
                 flag = abs.(D.λ .- μrange[2]) / (μrange[2] - μrange[1]) < 1e-2
             else
@@ -1559,7 +1553,7 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
                 return cvfit_gss(x, y, [left_new, right_new], λ, figname = figname, nfold = nfold, seed = seed, λ_is_μ = λ_is_μ, tol = tol)
             end
             ind = sortperm(μs)
-            verbose && @info "optimal μ = $(μs[end])" 
+            @info "optimal μ = $(μs[end])" 
             if !isnothing(figname)
                 savefig(plot(log.(μs[ind]), errs[ind], yerrors = σerrs[ind]), "/tmp/cv.png")
                 # savefig(scatter(log.(μs), errs), "/tmp/cv.png")

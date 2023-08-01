@@ -483,8 +483,8 @@ function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T}; n
     end
     μr = μ1#μ1 + 0.75 * (μ1 - μ0)
     μs = vcat(range(μl, μr, length = nμ), μ1, μ0)
-    println("μ0 = $μ0, μ1 = $μ1")
-    println("μl = $μl, μr = $μr")
+    @info "perform monotone test: μ_min = $μ0, μ_1se = $μ1"
+    @info "construct composite hypothesis in the range [$μl, $μr]"
     # μs = range(μ0, μ1, length = nμ)
     pval = Float64[]
     for (k, μ) in enumerate(μs)
@@ -688,4 +688,33 @@ function mono_test(x::AbstractVector{T}, y::AbstractVector{T}) where T <: Real
     pval = 1 - cdf(Chisq(res.workspace.J), tobs)
     # println("pval = $pval, tobs = $tobs, critical = $(quantile(Chisq(J), 0.95))")
     return pval < 0.05
+end
+
+# summary experiment results
+function summary_mono_test(resfile::String, task = "typeI_error")
+    texname = resfile[1:end-4] * ".tex"
+    res = deserialize(resfile)
+    methods = ["Meyer", "Ghosal", "Bowman",
+               "MD (CS) sup", "MD (CS) min", "MD (CS) 1se", 
+               "MD (SS) sup", "MD (SS) min", "MD (SS) 1se"]
+    nmethod = length(methods)
+    μ = mean(res)
+    @assert size(μ, 4) == nmethod
+    A = Array{Matrix, 1}(undef, nmethod)
+    for i in 1:nmethod
+        A[i] = hcat([μ[:, :, j, i] for j = 1:3]...)
+    end
+    name_σs = ["\$\\sigma = 0.001\$", "\$\\sigma = 0.01\$", "\$\\sigma = 0.1\$"]
+    if task == "typeI_error"
+        name_curves = ["\$x\$", "\$x^3\$", "\$x^{1/3}\$", "\$e^x\$", "\$1/(1+e^{-x})\$"]
+    elseif task == "bowman"
+        name_curves = "a" .* string.([0,0.15,0.25,0.45])
+    elseif task == "ghosal"
+        name_curves = "m" .* string.(1:4)
+    end
+    print2tex(A, methods, name_σs, 
+                    subcolnames=["n = 50", "100", "200"], 
+                    subrownames = name_curves, 
+                    colnames_of_rownames = ["Methods", "Curves"], 
+                    file = texname, format="raw")
 end

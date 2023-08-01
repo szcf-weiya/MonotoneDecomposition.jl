@@ -9,8 +9,6 @@ export gen_data,
        gen_kern,
        gp,
 
-       star_pval,
-
        mono_decomp,
 
        recover,
