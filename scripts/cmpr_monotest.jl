@@ -1,5 +1,6 @@
 using Distributed # not necessary when calling with `-p n` option
 using LaTeXStrings
+using Serialization
 using MonotoneDecomposition
 
 function postfix()
@@ -9,20 +10,20 @@ function postfix()
     return "$(pcommit)_$timestamp"    
 end
 
-function experiment_control_typeI_error(; resfolder = "/tmp" # "../res/mono_test/"
-                                        )
-    res = pmap(x->single_test_compare_mono(), 1:100)
-    serialize(joinpath(resfolder, "res_mono_test_mono_sup_$(postfix()).sil"), res)
+function experiment_control_typeI_error(; resfolder = "/tmp", # "../res/mono_test/"
+                                          nrep = 100)
+    res = pmap(x->single_test_compare_mono(), 1:nrep)
+    serialize(joinpath(resfolder, "res_mono_test_mono_sup_nrep$(nrep)_$(postfix()).sil"), res)
 end
 
-function experiment_bowman_example(; resfolder = "/tmp")
-    res = pmap(x->single_test_compare_bowman(), 1:100)
-    serialize(joinpath(resfolder, "res_mono_test_bowman_sup_$(postfix()).sil"), res)
+function experiment_bowman_example(; resfolder = "/tmp", nrep = 100)
+    res = pmap(x->single_test_compare_bowman(), 1:nrep)
+    serialize(joinpath(resfolder, "res_mono_test_bowman_sup_nrep$(nrep)_$(postfix()).sil"), res)
 end
 
-function experiment_ghosal_example(; resfolder = "/tmp")
-    res = pmap(x->single_test_compare_ghosal(), 1:100) 
-    serialize(joinpath(resfolder, "res_mono_test_ghosal_sup_$(postfix()).sil"), res)   
+function experiment_ghosal_example(; resfolder = "/tmp", nrep = 100)
+    res = pmap(x->single_test_compare_ghosal(), 1:nrep) 
+    serialize(joinpath(resfolder, "res_mono_test_ghosal_sup_nrep$(nrep)_$(postfix()).sil"), res)   
 end
 
 function summary_res()

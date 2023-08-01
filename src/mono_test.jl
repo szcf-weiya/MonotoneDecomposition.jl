@@ -513,48 +513,6 @@ function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T}; n
     return [maximum(pval) < 0.05, pval[end] < 0.05, pval[end-1] < 0.05]
 end
 
-function mono_test_bootstrap_sup0(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, ρ = 2) where T <: Real
-    n = length(y)
-    J, yhat, _ = cv_cubic_spline(x, y, x)
-    # Errs = [norm(y - yhat)]
-    err0 = norm(y - yhat)
-    μs = 10.0 .^ (-6:6)
-    nμ = length(μs)
-    pval = []
-    for (k, μ) in enumerate(μs)
-        D = mono_decomp_cs(x, yi, s = μ, s_is_μ = true, J = J)
-        error = y - D.yhat
-        err = norm(error)
-        # append!(Errs, norm(error))
-        if k == 1
-            ρ = max(ρ, err / err0)
-            # make sure the first one is included
-        end
-        if err > err0 * ρ
-            continue
-        end
-        tobs = var(D.γdown) #/ var(y - D.yhat)
-        ts = zeros(nrep)
-        c = mean(D.yhat) / 2
-        for i = 1:nrep
-            idx = sample(1:n, n)
-            yi = D.workspace.B * D.γup .+ c + error[idx]
-            yi = yi .- mean(yi) .+ mean(y)
-            Di = mono_decomp_cs(x, yi, s = μ, s_is_μ = true, J = J)
-            # ts[i] = var(Di.γdown) / var(y - Di.yhat)
-            ts[i] = var(Di.γdown) 
-        end
-        # pval[k] = sum(ts .> tobs) / nrep
-        append!(pval, sum(ts .> tobs) / nrep)
-    end
-    # return pval
-    # must include one
-    # if length(pval) == 0
-    #     @warn "$ρ is too small, and no mono decomp satisfies the condition"
-    # end
-    return maximum(pval) < 0.05
-end
-
 function mono_test_bootstrap_ss(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, debug = false, data_obey_H0 = false, one_se_rule = false) where T <: Real
     n = length(y)
     res, _ = cv_mono_decomp_ss(x, y, one_se_rule = one_se_rule)

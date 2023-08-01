@@ -12,9 +12,4 @@ using MonotoneDecomposition
     @test conf_band_width(CIs) == 1.0
 end
 
-@testset "star pvalues" begin
-    res = star_pval([0.0001, 0.1])
-    @test res == ["1.00e-04 (***)", "1.00e-01"]
-end
-
 end

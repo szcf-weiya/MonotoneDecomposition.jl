@@ -31,5 +31,10 @@ end
     @test size(res) == (1, 1, 5, 15)
 end
 
+@testset "demo plot data" begin
+    MonotoneDecomposition.demo_data(figfolder = "/tmp")
+    @test isfile("/tmp/ex-bowman.pdf")
+    @test isfile("/tmp/ex-ghosal.pdf")
+end
 
 end

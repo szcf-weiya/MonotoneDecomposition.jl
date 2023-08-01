@@ -31,27 +31,6 @@ Equally divide `1:N` into `K` folds with random seed `seed`. If `seed` is negati
 end
 
 """
-    stratify_div_into_folds(x; K, percent)
-
-Perform a stratified fold division. The top `percent` and the remaining perform `div_into_folds(x; K)` respectively. 
-"""
-function stratify_div_into_folds(x::Vector{Float64}; K::Int = 10, percent = 0.2)
-    # from small to large
-    idx = sortperm(x)
-    n = size(x, 1)
-    n1 = ceil(Int, percent * n)
-    n2 = n - n1
-    idx1 = idx[end-n1+1:end]
-    folds1 = div_into_folds(n1; K = K)
-    folds2 = div_into_folds(n2; K = K)
-    for i = 1:K
-        folds2[i] .= idx[1:end-n1][folds2[i]]
-        append!(folds2[i], idx[end-n1+1:end][folds1[i]])
-    end
-    return folds2
-end
-
-"""
     coverage_prob(CIs::AbstractMatrix, y0::AbstractVector)
 
 Calculate coverage probability given `n x 2` CI matrix `CIs` and true vector `y0` of size `n`.
