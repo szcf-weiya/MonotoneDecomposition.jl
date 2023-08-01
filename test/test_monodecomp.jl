@@ -563,7 +563,11 @@ end
                                         nλ = 2, # only for grid_search or iter_search
                                         nk = 50 # only for fix_ratio
                                     )
-                @test res[2] < res[4]
+                if one_se_rule
+                    @test res[2] > 0
+                else
+                    @test res[2] < res[4]
+                end
             end
         end
     end

@@ -173,7 +173,7 @@ function cv_cubic_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abstr
         train_idx = setdiff(1:n, test_idx)
         for (j, J) in enumerate(Js)
             _, yhat = cubic_spline(J)(x[train_idx], y[train_idx], x[test_idx])
-            errs[k, j] = norm(yhat - y[test_idx])
+            errs[k, j] = norm(yhat - y[test_idx])^2 / length(test_idx)
         end
     end
     μerr = dropdims(mean(errs, dims = 1), dims = 1)
@@ -251,7 +251,7 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abs
             γhats = _optim(y[train_idx], workspace, ss)
             ynews = predict(workspace, x[test_idx], γhats[1:J, :] + γhats[J+1:2J, :])
             for (i, s) in enumerate(ss)
-                errs[k, j, i] = norm(ynews[:, i] - y[test_idx]).^2 / length(test_idx)
+                errs[k, j, i] = norm(ynews[:, i] - y[test_idx])^2 / length(test_idx)
             end
         end
     end
@@ -1469,7 +1469,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}
         for j = 1:nλ
             for i = 1:nμ
                 m = (j-1) * nμ + i
-                err[k, i, j] = norm(ynews[:, m] - y[test_idx]).^2 / length(test_idx)
+                err[k, i, j] = norm(ynews[:, m] - y[test_idx])^2 / length(test_idx)
             end
         end
     end
