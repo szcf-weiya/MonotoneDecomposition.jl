@@ -200,7 +200,7 @@ function single_test_compare_bowman(;
                 props[j, k, l, 1] = meyer(x, y)
                 props[j, k, l, 2] = ghosal(x, y)
                 props[j, k, l, 3] = bowman(x, y)
-                props[j, k, l, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5, kw...)
+                props[j, k, l, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5)
                 props[j, k, l, 7:9] .= mono_test_bootstrap_supss(x, y; nrep = nrep, nμ = 5, kw...)
             end
         end
@@ -237,7 +237,7 @@ function single_test_compare_ghosal(;
                 props[i, k, j, 1] = meyer(x, y)
                 props[i, k, j, 2] = ghosal(x, y)
                 props[i, k, j, 3] = bowman(x, y)
-                props[i, k, j, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5, kw...)
+                props[i, k, j, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5)
                 props[i, k, j, 7:9] .= mono_test_bootstrap_supss(x, y; nrep = nrep, nμ = 5, kw...)
             end
         end
@@ -298,7 +298,7 @@ function single_test_compare_mono(;
                 props[i, k, j, 1] = meyer(x, y)
                 props[i, k, j, 2] = ghosal(x, y)
                 props[i, k, j, 3] = bowman(x, y)
-                props[i, k, j, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5, kw...)
+                props[i, k, j, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5)
                 props[i, k, j, 7:9] .= mono_test_bootstrap_supss(x, y; nrep = nrep, nμ = 5, kw...)
             end
         end
