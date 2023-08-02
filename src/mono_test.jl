@@ -178,7 +178,7 @@ function single_test_compare_bowman(;
         # ns = [100]
         # σs = [0.001, 0.01, 0.025, 0.05, 0.1] 
         σs = [0.001, 0.01, 0.1],
-        nrep = 500
+        nrep = 500, kw...
         # σs = [0.001, 0.1]     
     )
     # proposed, ghosal, meyer
@@ -200,8 +200,8 @@ function single_test_compare_bowman(;
                 props[j, k, l, 1] = meyer(x, y)
                 props[j, k, l, 2] = ghosal(x, y)
                 props[j, k, l, 3] = bowman(x, y)
-                props[j, k, l, 4:6] .= mono_test_bootstrap_sup(x, y, nrep = nrep, nμ = 5)
-                props[j, k, l, 7:9] .= mono_test_bootstrap_supss(x, y, nrep = nrep, nμ = 5)
+                props[j, k, l, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5, kw...)
+                props[j, k, l, 7:9] .= mono_test_bootstrap_supss(x, y; nrep = nrep, nμ = 5, kw...)
             end
         end
     end
@@ -214,7 +214,7 @@ function single_test_compare_ghosal(;
         # ns = [200]
         σs = [0.001, 0.01, 0.1],
         # σs = [0.001]
-        nrep = 500
+        nrep = 500, kw...
     )
     # proposed, ghosal, meyer, sm
     props = zeros(length(ns), length(σs), 4, 9)
@@ -237,8 +237,8 @@ function single_test_compare_ghosal(;
                 props[i, k, j, 1] = meyer(x, y)
                 props[i, k, j, 2] = ghosal(x, y)
                 props[i, k, j, 3] = bowman(x, y)
-                props[i, k, j, 4:6] .= mono_test_bootstrap_sup(x, y, nrep = nrep, nμ = 5)
-                props[i, k, j, 7:9] .= mono_test_bootstrap_supss(x, y, nrep = nrep, nμ = 5)
+                props[i, k, j, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5, kw...)
+                props[i, k, j, 7:9] .= mono_test_bootstrap_supss(x, y; nrep = nrep, nμ = 5, kw...)
             end
         end
     end
@@ -280,7 +280,7 @@ function single_test_compare_mono(;
         # σs = 10 .^ (-5:0.5:-1)
         # σs = 10 .^ (-3:0.5:-1)
         σs = [0.001, 0.01, 0.1],
-        nrep = 500
+        nrep = 500, kw...
     )
     # proposed, ghosal, meyer, sm
     props = zeros(length(ns), length(σs), 5, 9)
@@ -298,8 +298,8 @@ function single_test_compare_mono(;
                 props[i, k, j, 1] = meyer(x, y)
                 props[i, k, j, 2] = ghosal(x, y)
                 props[i, k, j, 3] = bowman(x, y)
-                props[i, k, j, 4:6] .= mono_test_bootstrap_sup(x, y, nrep = nrep, nμ = 5)
-                props[i, k, j, 7:9] .= mono_test_bootstrap_supss(x, y, nrep = nrep, nμ = 5)
+                props[i, k, j, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5, kw...)
+                props[i, k, j, 7:9] .= mono_test_bootstrap_supss(x, y; nrep = nrep, nμ = 5, kw...)
             end
         end
     end
@@ -421,9 +421,9 @@ function mono_test_bootstrap(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 
     return [pval < 0.05, pval2 < 0.05, pval3 < 0.05, pval4 < 0.05, pval5 < 0.05]
 end
 
-function mono_test_bootstrap_sup(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, nμ = 10) where T <: AbstractFloat
+function mono_test_bootstrap_sup(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, nμ = 10, nfold = 2) where T <: AbstractFloat
     n = length(y)
-    D1, μ0, μs0 = cv_mono_decomp_cs(x, y, ss = 10.0 .^ (-6:0.5:6), one_se_rule = true, fixJ = true)
+    D1, μ0, μs0 = cv_mono_decomp_cs(x, y, ss = 10.0 .^ (-6:0.5:6), one_se_rule = true, fixJ = true, nfold = nfold)
     μ1 = D1.μ
     J = D1.workspace.J
     # μ0 < μ1
@@ -466,9 +466,32 @@ function mono_test_bootstrap_sup(x::AbstractVector{T}, y::AbstractVector{T}; nre
     return [maximum(pval) < 0.05, pval[end] < 0.05, pval[end-1] < 0.05]
 end
 
-function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, nμ = 10, nfold = 5, seed = rand(UInt64)) where T <: Real
+maxgap(x::AbstractVector{T}) where T <: Real = maximum(x) - minimum(x)
+
+## aim for hete error, but if we can change different md decomposition method such that the md is homo, then no need (paper#12). 
+# function block_bootstrap_idx(n::Int; nblock = 10)
+#     # suppose x is sorted
+#     blocks = div_into_folds(n, K = nblock, seed = -1)
+#     idx = vcat([sample(z, length(z)) for z in blocks]...)
+#     ## x might not be sorted, idx is for sorted x
+#     ## sort(x)[idx] = x[?] => x = sort(x)[idx][invperm(?)]
+#     ## idx for sorted x, what is the index for x?
+#     ## sort(x)[idx]
+#     ## note that sort(x) = x[sortperm(x)]
+#     return idx
+# end
+
+function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T}; 
+                                    nrep = 100, nμ = 10, nfold = 2, seed = rand(UInt64),
+                                    opstat::Function = var,
+                                    md_method = "single_lambda"
+                                    ) where T <: Real
+    # for block index
+    idx = sortperm(x)
+    x = x[idx]
+    y = y[idx]
     n = length(y)
-    res, μ0, μs0 = cv_mono_decomp_ss(x, y, one_se_rule = true, nfold = nfold, seed = seed)
+    res, μ0, μs0 = cv_mono_decomp_ss(x, y, one_se_rule = true, nfold = nfold, seed = seed, method = md_method)
     μ1 = res.μ
     # μ0 < μ1
     # μ0 is not with 1se rule
@@ -490,17 +513,19 @@ function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T}; n
     for (k, μ) in enumerate(μs)
         D = mono_decomp_ss(res.workspace, x, y, res.λ, μ)
         error = y - D.yhat
-        err = norm(error)
-        tobs = var(D.γdown) #/ var(y - D.yhat)
         ts = zeros(nrep)
         c = mean(D.yhat) / 2
+        tobs = opstat(D.γdown)
+        # tobs = sum((D.γdown .- c).^2)
         for i = 1:nrep
             idx = sample(1:n, n)
+            # idx = block_bootstrap_idx(n; nblock = nblock)
             yi = res.workspace.B * D.γup .+ c + error[idx]
             yi = yi .- mean(yi) .+ mean(y)
             Di = mono_decomp_ss(res.workspace, x, yi, res.λ, μ)
             # ts[i] = var(Di.γdown) / var(y - Di.yhat)
-            ts[i] = var(Di.γdown) 
+            ts[i] = opstat(Di.γdown)
+            # ts[i] = sum((Di.γdown .- c).^2)
         end
         # pval[k] = sum(ts .> tobs) / nrep
         append!(pval, sum(ts .> tobs) / nrep)
@@ -510,7 +535,7 @@ function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T}; n
     # if length(pval) == 0
     #     @warn "$ρ is too small, and no mono decomp satisfies the condition"
     # end
-    println(pval)
+    @debug "pval = $pval"
     return [maximum(pval) < 0.05, pval[end] < 0.05, pval[end-1] < 0.05]
 end
 
