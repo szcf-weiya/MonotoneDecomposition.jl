@@ -12,4 +12,8 @@ using MonotoneDecomposition
     @test conf_band_width(CIs) == 1.0
 end
 
+@testset "folds" begin
+    @test div_into_folds(4, K=2, seed = 0) == [[1, 3], [2, 4]]
+end
+
 end

@@ -7,11 +7,18 @@ using StatsBase
 """
     div_into_folds(N::Int; K = 10, seed = 1234)
 
-Equally divide `1:N` into `K` folds with random seed `seed`. If `seed` is negative, it is a non-random division, where the `i`-th fold would be the `i`-th equidistant range.
+Equally divide `1:N` into `K` folds with random seed `seed`. Specially,
+
+- If `seed` is negative, it is a non-random division, where the `i`-th fold would be the `i`-th equidistant range.
+- If `seed = 0`, it is a non-random division, where each fold consists of equidistant indexes.
 """
 @inline function div_into_folds(N::Int; K::Int = 10, seed = 1234)
-    if seed >= 0
+    if seed > 0
         idxes = sample(MersenneTwister(seed), 1:N, N, replace = false)
+    elseif seed == 0
+        @assert N % K == 0
+        n = Int(N / K)
+        return [collect(i:K:N) for i in 1:K]
     else
         idxes = collect(1:N)
     end

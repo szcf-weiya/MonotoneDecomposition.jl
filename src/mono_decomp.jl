@@ -327,6 +327,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             nλ = 10, rλ = 0.5, # used in grid_search
                                                             rel_tol = 1e-1, maxiter = 10, # iter_search
                                                             k_magnitude = 2,
+                                                            seed = rand(UInt64),
                                                             one_se_rule = false, kw...) where T <: AbstractFloat
     yhat, yhatnew, Ω, λ, spl, B = smooth_spline(x, y, x0, design_matrix = true, keep_stuff = true)
     γup, γdown = mono_decomp(rcopy(R"$spl$fit$coef"))
@@ -339,16 +340,15 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
     verbose && @info "μrange: $μrange"
     if method == "single_lambda"
         verbose && @info "Smoothing Splines with fixed λ"
-        D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λ, figname = figname, nfold = nfold, tol = tol)
+        D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λ, figname = figname, nfold = nfold, tol = tol, seed = seed)
     elseif method == "fix_ratio"
         verbose && @info "Smoothing Splines with fixratio strategy"
         ks = range(0.05, 0.99, length = nk)
-        D, μs, errs, σerrs = cvfit(x, y, ks, λ, figname = figname, nfold = nfold)
+        D, μs, errs, σerrs = cvfit(x, y, ks, λ, figname = figname, nfold = nfold, seed = seed)
     elseif method == "iter_search" #88
         verbose && @info "Smoothing Splines with iter-search: λ -> μ -> λ -> ... -> μ"
         iter = 0
         λ0 = λ # make a backup
-        seed = rand(UInt64)
         while true
             iter += 1
             ## tune mu given lambda

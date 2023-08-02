@@ -466,9 +466,9 @@ function mono_test_bootstrap_sup(x::AbstractVector{T}, y::AbstractVector{T}; nre
     return [maximum(pval) < 0.05, pval[end] < 0.05, pval[end-1] < 0.05]
 end
 
-function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, nμ = 10) where T <: Real
+function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, nμ = 10, nfold = 5, seed = rand(UInt64)) where T <: Real
     n = length(y)
-    res, μ0, μs0 = cv_mono_decomp_ss(x, y, one_se_rule = true)
+    res, μ0, μs0 = cv_mono_decomp_ss(x, y, one_se_rule = true, nfold = nfold, seed = seed)
     μ1 = res.μ
     # μ0 < μ1
     # μ0 is not with 1se rule
@@ -510,6 +510,7 @@ function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T}; n
     # if length(pval) == 0
     #     @warn "$ρ is too small, and no mono decomp satisfies the condition"
     # end
+    println(pval)
     return [maximum(pval) < 0.05, pval[end] < 0.05, pval[end-1] < 0.05]
 end
 
@@ -708,7 +709,7 @@ function summary_mono_test(resfile::String, task = "typeI_error")
     if task == "typeI_error"
         name_curves = ["\$x\$", "\$x^3\$", "\$x^{1/3}\$", "\$e^x\$", "\$1/(1+e^{-x})\$"]
     elseif task == "bowman"
-        name_curves = "a" .* string.([0,0.15,0.25,0.45])
+        name_curves = "a = " .* string.([0,0.15,0.25,0.45])
     elseif task == "ghosal"
         name_curves = "m" .* string.(1:4)
     end
