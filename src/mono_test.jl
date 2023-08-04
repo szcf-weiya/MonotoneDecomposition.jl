@@ -178,6 +178,7 @@ function single_test_compare_bowman(;
         # ns = [100]
         # σs = [0.001, 0.01, 0.025, 0.05, 0.1] 
         σs = [0.001, 0.01, 0.1],
+        only_proposed = false,
         nrep = 500, kw...
         # σs = [0.001, 0.1]     
     )
@@ -197,10 +198,12 @@ function single_test_compare_bowman(;
                 # props[j, k, l, 21] = meyer(x, y)
                 # props[j, k, l, 22] = ghosal_S1n(x, y, C_GHOSAL[n])
                 # props[j, k, l, 23] = bowman(x, y)
-                props[j, k, l, 1] = meyer(x, y)
-                props[j, k, l, 2] = ghosal(x, y)
-                props[j, k, l, 3] = bowman(x, y)
-                props[j, k, l, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5)
+                if !only_proposed
+                    props[j, k, l, 1] = meyer(x, y)
+                    props[j, k, l, 2] = ghosal(x, y)
+                    props[j, k, l, 3] = bowman(x, y)
+                end
+                props[j, k, l, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5, kw...)
                 props[j, k, l, 7:9] .= mono_test_bootstrap_supss(x, y; nrep = nrep, nμ = 5, kw...)
             end
         end
@@ -214,6 +217,7 @@ function single_test_compare_ghosal(;
         # ns = [200]
         σs = [0.001, 0.01, 0.1],
         # σs = [0.001]
+        only_proposed = false,
         nrep = 500, kw...
     )
     # proposed, ghosal, meyer, sm
@@ -234,10 +238,12 @@ function single_test_compare_ghosal(;
                 # props[i, k, j, 23] = bowman(x, y)
                 # props[i, k, j, 24] = mono_test_bootstrap_sup(x, y)
                 # props[i, k, j, 25] = mono_test_bootstrap_supss(x, y)
-                props[i, k, j, 1] = meyer(x, y)
-                props[i, k, j, 2] = ghosal(x, y)
-                props[i, k, j, 3] = bowman(x, y)
-                props[i, k, j, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5)
+                if !only_proposed
+                    props[i, k, j, 1] = meyer(x, y)
+                    props[i, k, j, 2] = ghosal(x, y)
+                    props[i, k, j, 3] = bowman(x, y)
+                end
+                props[i, k, j, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5, kw...)
                 props[i, k, j, 7:9] .= mono_test_bootstrap_supss(x, y; nrep = nrep, nμ = 5, kw...)
             end
         end
@@ -280,6 +286,7 @@ function single_test_compare_mono(;
         # σs = 10 .^ (-5:0.5:-1)
         # σs = 10 .^ (-3:0.5:-1)
         σs = [0.001, 0.01, 0.1],
+        only_proposed = false,
         nrep = 500, kw...
     )
     # proposed, ghosal, meyer, sm
@@ -295,10 +302,12 @@ function single_test_compare_mono(;
                 # props[i, k, j, 21] = meyer(x, y)
                 # props[i, k, j, 22] = ghosal_S1n(x, y, C_GHOSAL[n])
                 # props[i, k, j, 23] = bowman(x, y)
-                props[i, k, j, 1] = meyer(x, y)
-                props[i, k, j, 2] = ghosal(x, y)
-                props[i, k, j, 3] = bowman(x, y)
-                props[i, k, j, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5)
+                if !only_proposed
+                    props[i, k, j, 1] = meyer(x, y)
+                    props[i, k, j, 2] = ghosal(x, y)
+                    props[i, k, j, 3] = bowman(x, y)
+                end
+                props[i, k, j, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5, kw...)
                 props[i, k, j, 7:9] .= mono_test_bootstrap_supss(x, y; nrep = nrep, nμ = 5, kw...)
             end
         end
@@ -421,9 +430,9 @@ function mono_test_bootstrap(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 
     return [pval < 0.05, pval2 < 0.05, pval3 < 0.05, pval4 < 0.05, pval5 < 0.05]
 end
 
-function mono_test_bootstrap_sup(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, nμ = 10, nfold = 2) where T <: AbstractFloat
+function mono_test_bootstrap_sup(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, nμ = 10, nfold = 2, fixJ = true, kw...) where T <: AbstractFloat
     n = length(y)
-    D1, μ0, μs0 = cv_mono_decomp_cs(x, y, ss = 10.0 .^ (-6:0.5:6), one_se_rule = true, fixJ = true, nfold = nfold)
+    D1, μ0, μs0 = cv_mono_decomp_cs(x, y, ss = 10.0 .^ (-6:0.5:6), one_se_rule = true, fixJ = fixJ, nfold = nfold)
     μ1 = D1.μ
     J = D1.workspace.J
     # μ0 < μ1
@@ -484,14 +493,16 @@ maxgap(x::AbstractVector{T}) where T <: Real = maximum(x) - minimum(x)
 function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T}; 
                                     nrep = 100, nμ = 10, nfold = 2, seed = rand(UInt64),
                                     opstat::Function = var,
-                                    md_method = "single_lambda"
+                                    md_method = "single_lambda",
+                                    tol = 1e-4,
+                                    kw...
                                     ) where T <: Real
     # for block index
     idx = sortperm(x)
     x = x[idx]
     y = y[idx]
     n = length(y)
-    res, μ0, μs0 = cv_mono_decomp_ss(x, y, one_se_rule = true, nfold = nfold, seed = seed, method = md_method)
+    res, μ0, μs0 = cv_mono_decomp_ss(x, y; one_se_rule = true, nfold = nfold, seed = seed, method = md_method, tol = tol, kw...)
     μ1 = res.μ
     # μ0 < μ1
     # μ0 is not with 1se rule
@@ -727,9 +738,6 @@ function summary_mono_test(resfile::String, task = "typeI_error")
     μ = mean(res)
     @assert size(μ, 4) == nmethod
     A = Array{Matrix, 1}(undef, nmethod)
-    for i in 1:nmethod
-        A[i] = hcat([μ[:, :, j, i] for j = 1:3]...)
-    end
     name_σs = ["\$\\sigma = 0.001\$", "\$\\sigma = 0.01\$", "\$\\sigma = 0.1\$"]
     if task == "typeI_error"
         name_curves = ["\$x\$", "\$x^3\$", "\$x^{1/3}\$", "\$e^x\$", "\$1/(1+e^{-x})\$"]
@@ -737,6 +745,13 @@ function summary_mono_test(resfile::String, task = "typeI_error")
         name_curves = "a = " .* string.([0,0.15,0.25,0.45])
     elseif task == "ghosal"
         name_curves = "m" .* string.(1:4)
+    end
+    for i in 1:nmethod
+        if task == "bowman"
+            A[i] = hcat([μ[:, :, j, i] for j = 1:3]...)
+        else
+            A[i] = hcat([μ[:, j, :, i]' for j = 1:3]...)
+        end
     end
     print2tex(A, methods, name_σs, 
                     subcolnames=["n = 50", "100", "200"], 

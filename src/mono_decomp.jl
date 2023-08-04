@@ -355,7 +355,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
             @debug "tune mu given lambda = $λ"
             # D1, workspace1 = cvfit(x, y, μmax * r, [λ], nfold = nfold, figname = figname, nμ = nμ, ρ = ρ)
             ## if needed, perform one se rule on the last iteration given lambda
-            D1, μs, errs, σerrs = cvfit_gss(x, y, μrange, λ, nfold = nfold, figname = figname, tol = tol, seed = seed)
+            D1, μs, errs, σerrs = cvfit_gss(x, y, μrange, λ, nfold = nfold, figname = figname[1:end-4] * "$iter-mu.png", tol = tol, seed = seed)
             # since D is not defined in the first iteration, so use `if..else`, and hence cannot use `ifelse`
             if iter == 1
                 err_μ = 1.0
@@ -369,7 +369,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
             ## re-tune lambda given mu
             @debug "tune lambda given mu = $(D1.μ)"
             # D, workspace = cvfit(x, y, D1.μ, λ, nfold = nfold, figname = figname, nλ = nλ, ρ = ρ)
-            D, _ = cvfit_gss(x, y, [1e-7, 1.5λ0], D1.μ, nfold = nfold, figname = figname, λ_is_μ = true, tol = tol, seed = seed)
+            D, _ = cvfit_gss(x, y, [1e-7, 10λ0], D1.μ, nfold = nfold, figname = figname[1:end-4] * "$iter-lam.png", λ_is_μ = true, tol = tol, seed = seed)
             err_λ = abs(D.λ - D1.λ) / D.λ
             λ = D.λ # for next iteration
             @debug "iter = $iter, err_μ = $err_μ, err_λ = $err_λ"
@@ -1512,13 +1512,14 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
     iter = 0
     while true
         iter += 1
+        ifigname = figname[1:end-4] * "_$iter.png"
         iter % 10 == 0 && @debug "iter = $iter: narrow μ into $([a, b])"
         c = b - (b - a) / τ
         d = a + (b - a) / τ
         if λ_is_μ
-            D, μerr, σerr = cvfit(x, y, [λ], [c, d], nfold = nfold, figname = figname, seed = seed)
+            D, μerr, σerr = cvfit(x, y, [λ], [c, d], nfold = nfold, figname = ifigname, seed = seed)
         else
-            D, μerr, σerr = cvfit(x, y, [c, d], [λ], nfold = nfold, figname = figname, seed = seed)
+            D, μerr, σerr = cvfit(x, y, [c, d], [λ], nfold = nfold, figname = ifigname, seed = seed)
         end
         append!(μs, [c, d])
         append!(errs, μerr)
@@ -1553,9 +1554,9 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
                 return cvfit_gss(x, y, [left_new, right_new], λ, figname = figname, nfold = nfold, seed = seed, λ_is_μ = λ_is_μ, tol = tol)
             end
             ind = sortperm(μs)
-            @info "optimal μ = $(μs[end])" 
+            @debug "optimal μ = $(μs[end])" 
             if !isnothing(figname)
-                savefig(plot(log.(μs[ind]), errs[ind], yerrors = σerrs[ind]), "/tmp/cv.png")
+                savefig(plot(log.(μs[ind]), errs[ind], yerrors = σerrs[ind]), figname)
                 # savefig(scatter(log.(μs), errs), "/tmp/cv.png")
             end
             return D, μs[ind], errs[ind], σerrs[ind]
@@ -1575,7 +1576,7 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
     best_errs = nothing
     best_σerrs = nothing
     for λ in λs
-        @info "given λ = $λ, search μ..."
+        @debug "given λ = $λ, search μ..."
         Di, μi, erri, σerri = cvfit_gss(x, y, μrange, λ, nfold = nfold, figname = figname, seed = seed, tol = tol)
         if best_err > minimum(erri)
             D = Di
