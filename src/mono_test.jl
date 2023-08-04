@@ -478,23 +478,24 @@ end
 maxgap(x::AbstractVector{T}) where T <: Real = maximum(x) - minimum(x)
 
 ## aim for hete error, but if we can change different md decomposition method such that the md is homo, then no need (paper#12). 
-# function block_bootstrap_idx(n::Int; nblock = 10)
-#     # suppose x is sorted
-#     blocks = div_into_folds(n, K = nblock, seed = -1)
-#     idx = vcat([sample(z, length(z)) for z in blocks]...)
-#     ## x might not be sorted, idx is for sorted x
-#     ## sort(x)[idx] = x[?] => x = sort(x)[idx][invperm(?)]
-#     ## idx for sorted x, what is the index for x?
-#     ## sort(x)[idx]
-#     ## note that sort(x) = x[sortperm(x)]
-#     return idx
-# end
+function block_bootstrap_idx(n::Int; nblock = 10)
+    # suppose x is sorted
+    blocks = div_into_folds(n, K = nblock, seed = -1)
+    idx = vcat([sample(z, length(z)) for z in blocks]...)
+    ## x might not be sorted, idx is for sorted x
+    ## sort(x)[idx] = x[?] => x = sort(x)[idx][invperm(?)]
+    ## idx for sorted x, what is the index for x?
+    ## sort(x)[idx]
+    ## note that sort(x) = x[sortperm(x)]
+    return idx
+end
 
 function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T}; 
                                     nrep = 100, nμ = 10, nfold = 2, seed = rand(UInt64),
                                     opstat::Function = var,
                                     md_method = "single_lambda",
                                     tol = 1e-4,
+                                    nblock = 10,
                                     kw...
                                     ) where T <: Real
     # for block index
@@ -517,8 +518,8 @@ function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T};
     end
     μr = μ1#μ1 + 0.75 * (μ1 - μ0)
     μs = vcat(range(μl, μr, length = nμ), μ1, μ0)
-    @info "perform monotone test: μ_min = $μ0, μ_1se = $μ1"
-    @info "construct composite hypothesis in the range [$μl, $μr]"
+    @debug "perform monotone test: μ_min = $μ0, μ_1se = $μ1"
+    @debug "construct composite hypothesis in the range [$μl, $μr]"
     # μs = range(μ0, μ1, length = nμ)
     pval = Float64[]
     for (k, μ) in enumerate(μs)
@@ -529,8 +530,8 @@ function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T};
         tobs = opstat(D.γdown)
         # tobs = sum((D.γdown .- c).^2)
         for i = 1:nrep
-            idx = sample(1:n, n)
-            # idx = block_bootstrap_idx(n; nblock = nblock)
+            # idx = sample(1:n, n)
+            idx = block_bootstrap_idx(n; nblock = nblock)
             yi = res.workspace.B * D.γup .+ c + error[idx]
             yi = yi .- mean(yi) .+ mean(y)
             Di = mono_decomp_ss(res.workspace, x, yi, res.λ, μ)
@@ -715,7 +716,7 @@ end
 
 function mono_test(x::AbstractVector{T}, y::AbstractVector{T}) where T <: Real
     # x, y = gen_data(a = 0.15, σ = 0.025)
-    res, _ = cv_mono_decomp_cs(x, y, x, Js = 4:20, ss = 10.0 .^ (-6:0.5:-1))
+    res, _ = cv_mono_decomp_cs(x, y, Js = 4:20, ss = 10.0 .^ (-6:0.5:-1), fixJ = false)
     # scatter(x, y)
     # plot!(x, res.yhat)
     c = mean(res.yhat) / 2
