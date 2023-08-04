@@ -329,6 +329,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             rel_tol = 1e-1, maxiter = 10, # iter_search
                                                             k_magnitude = 2,
                                                             seed = rand(UInt64),
+                                                            prop_nknots = 1.0,
                                                             one_se_rule = false, kw...) where T <: AbstractFloat
     yhat, yhatnew, Ω, λ, spl, B = smooth_spline(x, y, x0, design_matrix = true, keep_stuff = true)
     γup, γdown = mono_decomp(rcopy(R"$spl$fit$coef"))
@@ -341,11 +342,11 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
     verbose && @info "μrange: $μrange"
     if method == "single_lambda"
         verbose && @info "Smoothing Splines with fixed λ"
-        D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λ, figname = figname, nfold = nfold, tol = tol, seed = seed)
+        D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λ, figname = figname, nfold = nfold, tol = tol, seed = seed, prop_nknots = prop_nknots)
     elseif method == "fix_ratio"
         verbose && @info "Smoothing Splines with fixratio strategy"
         ks = range(0.05, 0.99, length = nk)
-        D, μs, errs, σerrs = cvfit(x, y, ks, λ, figname = figname, nfold = nfold, seed = seed)
+        D, μs, errs, σerrs = cvfit(x, y, ks, λ, figname = figname, nfold = nfold, seed = seed, prop_nknots = prop_nknots)
     elseif method == "iter_search" #88
         verbose && @info "Smoothing Splines with iter-search: λ -> μ -> λ -> ... -> μ"
         iter = 0
@@ -358,7 +359,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
             ## if needed, perform one se rule on the last iteration given lambda
             D1, μs, errs, σerrs = cvfit_gss(x, y, μrange, λ, nfold = nfold, 
                                             figname = isnothing(figname) ? figname : figname[1:end-4] * "$iter-mu.png", 
-                                            tol = tol, seed = seed)
+                                            tol = tol, seed = seed, prop_nknots = prop_nknots)
             # since D is not defined in the first iteration, so use `if..else`, and hence cannot use `ifelse`
             if iter == 1
                 err_μ = 1.0
@@ -374,7 +375,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
             # D, workspace = cvfit(x, y, D1.μ, λ, nfold = nfold, figname = figname, nλ = nλ, ρ = ρ)
             D, _ = cvfit_gss(x, y, [1e-7, 10λ0], D1.μ, nfold = nfold, 
                             figname = isnothing(figname) ? figname : figname[1:end-4] * "$iter-lam.png", 
-                            λ_is_μ = true, tol = tol, seed = seed)
+                            λ_is_μ = true, tol = tol, seed = seed, prop_nknots = prop_nknots)
             err_λ = abs(D.λ - D1.λ) / D.λ
             λ = D.λ # for next iteration
             @debug "iter = $iter, err_μ = $err_μ, err_λ = $err_λ"
@@ -386,13 +387,14 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         λs = range(1-rλ, 1+rλ, length = nλ) .* λ
         verbose && @info "Smoothing Splines with grid-search λ ∈ $λs, μ ∈ $μrange"
         seed = rand(UInt64)
-        D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λs, nfold = nfold, figname = figname, seed = seed, tol = tol)
+        D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λs, nfold = nfold, figname = figname, seed = seed, tol = tol, prop_nknots = prop_nknots)
     end
     if one_se_rule
         ind = cv_one_se_rule(errs, σerrs, small_is_simple = false)
         μopt = μs[ind]
         @debug "use 1se rule: before 1se: μ = $(D.μ); after 1se: μ = $μopt"
-        D = mono_decomp_ss(D.workspace, x, y, D.λ, μopt)
+        # workspace has been defined, so J would be inherited regardless of prop_nknots
+        D = mono_decomp_ss(D.workspace, x, y, D.λ, μopt) 
     end
     return D, μs[argmin(errs)], μs, errs, σerrs, yhat, yhatnew
 end
@@ -899,9 +901,9 @@ struct MonoDecomp{T <: AbstractFloat}
     workspace::WorkSpace
 end
 
-function build_model!(workspace::WorkSpaceSS, x::AbstractVector{T}; ε = (eps())^(1/3)) where T <: AbstractFloat
+function build_model!(workspace::WorkSpaceSS, x::AbstractVector{T}; ε = (eps())^(1/3), prop_nknots = 1.0) where T <: AbstractFloat
     if !isdefined(workspace, 3) # the first two will be automatically initialized
-        knots, mx, rx, idx, idx0 = pick_knots(x, all_knots = false)
+        knots, mx, rx, idx, idx0 = pick_knots(x, all_knots = false, prop_nknots = prop_nknots)
         bbasis = R"fda::create.bspline.basis(breaks = $knots, norder = 4)"
         Ω = rcopy(R"fda::eval.penalty($bbasis, 2)")
         Ω += ε * 1.0I
@@ -936,8 +938,8 @@ end
 
 Monotone decomposition with smoothing splines.
 """
-function mono_decomp_ss(workspace::WorkSpaceSS, x::AbstractVector{T}, y::AbstractVector{T}, λ::AbstractFloat, s::AbstractFloat; s_is_μ = true) where T <: AbstractFloat
-    build_model!(workspace, x)
+function mono_decomp_ss(workspace::WorkSpaceSS, x::AbstractVector{T}, y::AbstractVector{T}, λ::AbstractFloat, s::AbstractFloat; s_is_μ = true, prop_nknots = 1.0) where T <: AbstractFloat
+    build_model!(workspace, x, prop_nknots = prop_nknots)
     if s_is_μ
         γhat = _optim(y, workspace.J, workspace.B, nothing, workspace.H, L = workspace.L, t = nothing, λ = λ, μ = s)
     else
@@ -1334,9 +1336,9 @@ Cross-validation for monotone decomposition.
 # end
 
 # tune lambda after fixing mu
-function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μstar::Real, λstar::Real; nfold = 10, maxiter = 20, figname = "/tmp/cv_curve.png", ρ = 0.05, tol = eps()^(1/3), nλ = 10, rλ = 0.1, seed = rand(UInt64)) where T <: AbstractFloat
+function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μstar::Real, λstar::Real; nfold = 10, maxiter = 20, figname = "/tmp/cv_curve.png", ρ = 0.05, tol = eps()^(1/3), nλ = 10, rλ = 0.1, seed = rand(UInt64), prop_nknots = 1.0) where T <: AbstractFloat
     λs = range(1-rλ, 1+rλ, length = nλ + 1) * λstar
-    D, μerr = cvfit(x, y, [μstar], λs, nfold = nfold, figname = figname, seed = seed)
+    D, μerr = cvfit(x, y, [μstar], λs, nfold = nfold, figname = figname, seed = seed, prop_nknots = prop_nknots)
     last_min_μerr = minimum(μerr)
     lastD = deepcopy(D)
     if abs(1 - D.λ / λstar) / (2rλ) < ρ
@@ -1350,7 +1352,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μstar::Real, λstar:
             end
             println("extend the search region of λ: searching [1-$rλ, 1+$rλ] * $λstar")
             λs = range(1-rλ, 1+rλ, length = nλ + 1) * λstar
-            D, μerr = cvfit(x, y, [μstar], λs, nfold = nfold, figname = figname, seed = seed)
+            D, μerr = cvfit(x, y, [μstar], λs, nfold = nfold, figname = figname, seed = seed, prop_nknots = prop_nknots)
             min_μerr = minimum(μerr)
             if min_μerr > last_min_μerr
                 println("no better lambda after extension")
@@ -1369,9 +1371,9 @@ end
 """
     Given `μmax`, and construct μs = (1:nμ) ./ nμ * μmax. If the optimal `μ` near the boundary, double or halve `μmax`.
 """
-function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μmax::Real, λ::AbstractVector{T}; nfold = 10, nμ = 100, maxiter = 20, figname = "/tmp/cv_curve.png", ρ = 0.05, tol = eps()^(1/3), seed = rand(UInt64)) where T <: AbstractFloat
+function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μmax::Real, λ::AbstractVector{T}; nfold = 10, nμ = 100, maxiter = 20, figname = "/tmp/cv_curve.png", ρ = 0.05, tol = eps()^(1/3), seed = rand(UInt64), prop_nknots = 1.0) where T <: AbstractFloat
     # μ = (1:nμ) ./ nμ * μmax
-    D, μerr = cvfit(x, y, (1:nμ) ./ nμ .* μmax, λ, figname = figname, nfold = nfold, seed = seed)
+    D, μerr = cvfit(x, y, (1:nμ) ./ nμ .* μmax, λ, figname = figname, nfold = nfold, seed = seed, prop_nknots = prop_nknots)
     last_min_μerr = minimum(μerr)
     # if D.μ near the left boundary
     if D.μ / μmax < ρ
@@ -1381,7 +1383,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μmax::Real, λ::Abst
             iter += 1
             μmax = μmax / 2
             println("divide the search region of μ: searching [0, $μmax]")
-            D, μerr = cvfit(x, y, (1:nμ) ./ nμ .* μmax, λ, figname = figname, nfold = nfold, seed = seed)
+            D, μerr = cvfit(x, y, (1:nμ) ./ nμ .* μmax, λ, figname = figname, nfold = nfold, seed = seed, prop_nknots = prop_nknots)
             min_μerr = minimum(μerr)
             if min_μerr > last_min_μerr
                 println("no better mu after division")
@@ -1404,7 +1406,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μmax::Real, λ::Abst
             # μmin = (μmax + μmin) / 2
             # μmax = μmin + step
             println("extend the search region of μ: searching [0, $μmax]")
-            D, μerr = cvfit(x, y, (1:nμ) ./ nμ .* μmax, λ, figname = figname, nfold = nfold, seed = seed)
+            D, μerr = cvfit(x, y, (1:nμ) ./ nμ .* μmax, λ, figname = figname, nfold = nfold, seed = seed, prop_nknots = prop_nknots)
             # D, workspace, μerr = cvfit(x, y, μmin .+ (1:nμ) ./ nμ .* step, λ, figname = figname, nfold = nfold)
             min_μerr = minimum(μerr)
             if min_μerr > last_min_μerr
@@ -1421,7 +1423,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μmax::Real, λ::Abst
     return D, last_min_μerr
 end
 
-function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, paras::AbstractMatrix{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64)) where T <: AbstractFloat
+function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, paras::AbstractMatrix{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), same_J_after_CV = true, prop_nknots = 1.0) where T <: AbstractFloat
     # assume two columns, the first column is mu, and the 2nd column is lambda
     @assert size(paras, 2) == 2
     n = length(x)
@@ -1432,7 +1434,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, paras::AbstractMatrix
         test_idx = folds[k]
         train_idx = setdiff(1:n, test_idx)
         workspace = WorkSpaceSS()
-        build_model!(workspace, x[train_idx])
+        build_model!(workspace, x[train_idx], prop_nknots = prop_nknots)
         # ...............................................................................lambda.......mu
         γhats = _optim(y[train_idx], workspace.J, workspace.B, workspace.H, workspace.L, paras[:, 2], paras[:, 1])
         ynews = predict(workspace, x[test_idx], γhats[1:workspace.J, :] + γhats[workspace.J+1:2workspace.J, :])
@@ -1449,11 +1451,16 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, paras::AbstractMatrix
     end
     ind = argmin(μerr)
     workspace = WorkSpaceSS()
-    D = mono_decomp_ss(workspace, x, y, paras[ind, 2], paras[ind, 1])
+    # number of points in each fold
+    n_fold = round(Int, n / nfold * (nfold - 1))
+    nx_fold = rcopy(R".nknots.smspl($(n_fold))")
+    nx = rcopy(R".nknots.smspl($(n))")
+    D = mono_decomp_ss(workspace, x, y, paras[ind, 2], paras[ind, 1], 
+                        prop_nknots = prop_nknots * ifelse(same_J_after_CV, nx_fold / nx, 1.0))
     return D, paras[:, 1], μerr, σerr
 end
 
-function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}, λ::AbstractVector{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64)) where T <: AbstractFloat
+function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}, λ::AbstractVector{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), same_J_after_CV = true, prop_nknots = 1.0) where T <: AbstractFloat
     n = length(x)
     folds = div_into_folds(n, K = nfold, seed = seed)
     nλ = length(λ)
@@ -1466,7 +1473,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}
         test_idx = folds[k]
         train_idx = setdiff(1:n, test_idx)
         workspace = WorkSpaceSS()
-        build_model!(workspace, x[train_idx])
+        build_model!(workspace, x[train_idx], prop_nknots = prop_nknots)
         γhats = _optim(y[train_idx], workspace.J, workspace.B, workspace.H, workspace.L, λs, μs)
         ynews = predict(workspace, x[test_idx], γhats[1:workspace.J, :] + γhats[workspace.J+1:2workspace.J, :])
         for j = 1:nλ
@@ -1485,7 +1492,14 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}
     end
     ind = argmin(μerr)
     workspace = WorkSpaceSS()
-    D = mono_decomp_ss(workspace, x, y, λ[ind[2]], μ[ind[1]])
+    ## NB: in each fold, the number of points is fewer than the number of points in the all data
+    ## and it results the number of basis function is different. Should we keep it the same?
+    # number of points in each fold
+    n_fold = round(Int, n / nfold * (nfold - 1))
+    nx_fold = rcopy(R".nknots.smspl($(n_fold))")
+    nx = rcopy(R".nknots.smspl($(n))")    
+    D = mono_decomp_ss(workspace, x, y, λ[ind[2]], μ[ind[1]], 
+                        prop_nknots = prop_nknots * ifelse(same_J_after_CV, nx_fold / nx, 1.0)) 
     return D, μerr, σerr
 end
 
@@ -1503,7 +1517,7 @@ Cross-validation by Golden Section Searching `μ`` in `μrange` given `λ`.
 - If `λ_is_μ`, search `λ` in `μrange` given `λ (μ)`
 - Note that `one_se_rule` is not suitable for the golden section search.
 """
-function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λ::Real; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), tol = 1e-7, λ_is_μ = false) where T <: AbstractFloat
+function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λ::Real; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), tol = 1e-7, λ_is_μ = false, prop_nknots = 1.0) where T <: AbstractFloat
     τ = (sqrt(5) + 1) / 2
     μs = Float64[]
     errs = Float64[]
@@ -1522,9 +1536,9 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
         c = b - (b - a) / τ
         d = a + (b - a) / τ
         if λ_is_μ
-            D, μerr, σerr = cvfit(x, y, [λ], [c, d], nfold = nfold, figname = ifigname, seed = seed)
+            D, μerr, σerr = cvfit(x, y, [λ], [c, d], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots)
         else
-            D, μerr, σerr = cvfit(x, y, [c, d], [λ], nfold = nfold, figname = ifigname, seed = seed)
+            D, μerr, σerr = cvfit(x, y, [c, d], [λ], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots)
         end
         append!(μs, [c, d])
         append!(errs, μerr)
@@ -1556,7 +1570,7 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
                 # since 0.75 < 1 - 1e-2, so it is ok
                 left_new = μrange[1] + 0.75 * (μrange[2] - μrange[1])
                 right_new = μrange[2] * 2
-                return cvfit_gss(x, y, [left_new, right_new], λ, figname = figname, nfold = nfold, seed = seed, λ_is_μ = λ_is_μ, tol = tol)
+                return cvfit_gss(x, y, [left_new, right_new], λ, figname = figname, nfold = nfold, seed = seed, λ_is_μ = λ_is_μ, tol = tol, prop_nknots = prop_nknots)
             end
             ind = sortperm(μs)
             @debug "optimal μ = $(μs[end])" 
@@ -1574,7 +1588,7 @@ end
 
 For each `λ` in `λs`, perform `cvfit(x, y, μrange, λ)`, and store the current best CV error. Finally, return the smallest one.
 """
-function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λs::AbstractVector{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), tol = 1e-7, λ_is_μ = false) where T <: AbstractFloat
+function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λs::AbstractVector{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), tol = 1e-7, λ_is_μ = false, prop_nknots = prop_nknots) where T <: AbstractFloat
     best_err = Inf
     D = nothing
     best_μs = nothing
@@ -1582,7 +1596,7 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
     best_σerrs = nothing
     for λ in λs
         @debug "given λ = $λ, search μ..."
-        Di, μi, erri, σerri = cvfit_gss(x, y, μrange, λ, nfold = nfold, figname = figname, seed = seed, tol = tol)
+        Di, μi, erri, σerri = cvfit_gss(x, y, μrange, λ, nfold = nfold, figname = figname, seed = seed, tol = tol, prop_nknots = prop_nknots)
         if best_err > minimum(erri)
             D = Di
             best_err = minimum(erri)
