@@ -34,8 +34,12 @@ function demo_data(; figfolder = "/tmp" # "../notes"
     savefig(joinpath(figfolder, "ex-ghosal.pdf"))
 end
 
-function gen_mono_data(; n = 100, σ = 0.1)
-    x = rand(n)
+function gen_mono_data(; n = 100, σ = 0.1, equidistant = false)
+    if equidistant
+        x = range(0, 1, length = n)
+    else
+        x = rand(n)
+    end
     m1 = x + randn(n) * σ
     m2 = x .^3 + randn(n) * σ
     m3 = cbrt.(x) + randn(n) * σ
@@ -287,13 +291,14 @@ function single_test_compare_mono(;
         # σs = 10 .^ (-3:0.5:-1)
         σs = [0.001, 0.01, 0.1],
         only_proposed = false,
+        equidistant = false,
         nrep = 500, kw...
     )
     # proposed, ghosal, meyer, sm
     props = zeros(length(ns), length(σs), 5, 9)
     for (i, n) in enumerate(ns)
         for (k, σ) in enumerate(σs)
-            x, m1, m2, m3, m4, m5 = gen_mono_data(n = n, σ = σ)
+            x, m1, m2, m3, m4, m5 = gen_mono_data(n = n, σ = σ, equidistant = equidistant)
             for (j, y) in enumerate([m1, m2, m3, m4, m5])
                 # props[i, k, j, 1:5] = mono_test_bootstrap(x, y, data_obey_H0 = false, one_se_rule=true)
                 # props[i, k, j, 6:10] = mono_test_bootstrap_ss(x, y, data_obey_H0 = false, one_se_rule=true)
