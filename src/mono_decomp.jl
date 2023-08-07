@@ -339,6 +339,9 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
     s_discrepancy = [max(eps(), min(s_residual, s_smoothness)) / 10^k_magnitude, 
                                 max(s_residual, s_smoothness) * 10^k_magnitude]
     μrange = s_discrepancy / s0^2
+    if μrange[2] < 1e-6 # cbrt of eps()
+        μrange[2] = 1e-6
+    end
     verbose && @info "μrange: $μrange"
     if method == "single_lambda"
         verbose && @info "Smoothing Splines with fixed λ"
@@ -351,6 +354,11 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         verbose && @info "Smoothing Splines with iter-search: λ -> μ -> λ -> ... -> μ"
         iter = 0
         λ0 = λ # make a backup
+        if 10λ0 < 1e-6
+            λrange = [eps(), 1e-6]
+        else
+            λrange = [eps(), 10λ0]
+        end
         while true
             iter += 1
             ## tune mu given lambda
@@ -366,20 +374,16 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
             else
                 err_μ = abs(D1.μ - D.μ) / D1.μ
             end
-            if err_μ < rel_tol
-                D = D1
-                break
-            end
             ## re-tune lambda given mu
             @debug "tune lambda given mu = $(D1.μ)"
             # D, workspace = cvfit(x, y, D1.μ, λ, nfold = nfold, figname = figname, nλ = nλ, ρ = ρ)
-            D, _ = cvfit_gss(x, y, [1e-7, 10λ0], D1.μ, nfold = nfold, 
+            D, _ = cvfit_gss(x, y, λrange, D1.μ, nfold = nfold, 
                             figname = isnothing(figname) ? figname : figname[1:end-4] * "$iter-lam.png", 
                             λ_is_μ = true, tol = tol, seed = seed, prop_nknots = prop_nknots)
             err_λ = abs(D.λ - D1.λ) / D.λ
             λ = D.λ # for next iteration
             @debug "iter = $iter, err_μ = $err_μ, err_λ = $err_λ"
-            if (iter > maxiter) | (err_λ < rel_tol)
+            if (iter > maxiter) | (max(err_λ, err_μ) < rel_tol)
                 break
             end
         end
@@ -1527,12 +1531,12 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
     c = a
     d = b
     tol = tol * max(1.0, b - a)
-    @debug "search μ in $([a, b])"
+    @debug "search $(ifelse(λ_is_μ, "λ", "μ")) in $([a, b])"
     iter = 0
     while true
         iter += 1
         ifigname = isnothing(figname) ? figname : figname[1:end-4] * "_$iter.png"
-        iter % 10 == 0 && @debug "iter = $iter: narrow μ into $([a, b])"
+        iter % 10 == 0 && @debug "iter = $iter: narrow $(ifelse(λ_is_μ, "λ", "μ")) into $([a, b])"
         c = b - (b - a) / τ
         d = a + (b - a) / τ
         if λ_is_μ
@@ -1573,7 +1577,7 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
                 return cvfit_gss(x, y, [left_new, right_new], λ, figname = figname, nfold = nfold, seed = seed, λ_is_μ = λ_is_μ, tol = tol, prop_nknots = prop_nknots)
             end
             ind = sortperm(μs)
-            @debug "optimal μ = $(μs[end])" 
+            @debug "optimal $(ifelse(λ_is_μ, "λ", "μ")) = $(μs[end])" 
             if !isnothing(figname)
                 savefig(plot(log.(μs[ind]), errs[ind], yerrors = σerrs[ind]), figname)
                 # savefig(scatter(log.(μs), errs), "/tmp/cv.png")
