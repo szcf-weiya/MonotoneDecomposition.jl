@@ -330,6 +330,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             k_magnitude = 2,
                                                             seed = rand(UInt64),
                                                             prop_nknots = 1.0,
+                                                            include_boundary = false,
                                                             one_se_rule = false, kw...) where T <: AbstractFloat
     yhat, yhatnew, Ω, λ, spl, B = smooth_spline(x, y, x0, design_matrix = true, keep_stuff = true)
     γup, γdown = mono_decomp(rcopy(R"$spl$fit$coef"))
@@ -345,7 +346,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
     verbose && @info "μrange: $μrange"
     if method == "single_lambda"
         verbose && @info "Smoothing Splines with fixed λ"
-        D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λ, figname = figname, nfold = nfold, tol = tol, seed = seed, prop_nknots = prop_nknots)
+        D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λ, figname = figname, nfold = nfold, tol = tol, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary)
     elseif method == "fix_ratio"
         verbose && @info "Smoothing Splines with fixratio strategy"
         ks = range(0.05, 0.99, length = nk)
@@ -354,11 +355,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         verbose && @info "Smoothing Splines with iter-search: λ -> μ -> λ -> ... -> μ"
         iter = 0
         λ0 = λ # make a backup
-        if 10λ0 < 1e-6
-            λrange = [eps(), 1e-6]
-        else
-            λrange = [eps(), 10λ0]
-        end
+        λrange = [min(0.1*λ0, eps()), max(10λ0, 1e-6)]
         while true
             iter += 1
             ## tune mu given lambda
@@ -368,6 +365,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
             D1, μs, errs, σerrs = cvfit_gss(x, y, μrange, λ, nfold = nfold, 
                                             figname = isnothing(figname) ? figname : figname[1:end-4] * "$iter-mu.png", 
                                             tol = tol, seed = seed, prop_nknots = prop_nknots)
+            μrange = [min(μrange[1], 0.5 * D1.μ), max(μrange[2], 2 * D1.μ)]
             # since D is not defined in the first iteration, so use `if..else`, and hence cannot use `ifelse`
             if iter == 1
                 err_μ = 1.0
@@ -380,6 +378,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
             D, _ = cvfit_gss(x, y, λrange, D1.μ, nfold = nfold, 
                             figname = isnothing(figname) ? figname : figname[1:end-4] * "$iter-lam.png", 
                             λ_is_μ = true, tol = tol, seed = seed, prop_nknots = prop_nknots)
+            λrange = [min(λrange[1], 0.5 * D.λ), max(λrange[2], 2 * D.λ)]
             err_λ = abs(D.λ - D1.λ) / D.λ
             λ = D.λ # for next iteration
             @debug "iter = $iter, err_μ = $err_μ, err_λ = $err_λ"
@@ -714,12 +713,13 @@ end
                 H::AbstractMatrix{Int}, L::AbstractMatrix{T}, 
                 λs::AbstractVector{T}, μs::AbstractVector{T};
                 del_constraint = true,
+                strict = false,
                 ) where T <: AbstractFloat
     model = Model(OPTIMIZER)
     set_silent(model)
     # TODO: test the speed and possibly switch to it if necessary, as in _optim!
     # set_optimizer_attribute(model, "BarHomogeneous", 1) # use only in demo since practically if a numerical error occurs, although it can be solved by another method, but it also implies that the current parameter is not the best
-    #set_optimizer_attribute(model, "max_iter", 10000)
+    # set_optimizer_attribute(model, "max_iter", 10000)
     @variable(model, γ[1:2J])
     @variable(model, z)
     @constraint(model, c1, H * γ .<= 0)
@@ -742,10 +742,12 @@ end
         i = 1
         if status == MOI.NUMERICAL_ERROR
             @debug "$status when λ=$λ, μ=$μ: use constant half mean as its estimate"
+            strict && error(status)
             γhats[:, i] .= mean(y) / 2
         else
             if !(status in [MOI.OPTIMAL, MOI.ALMOST_OPTIMAL])
                 @debug "$status when λ=$λ, μ=$μ: direct take the solution"
+                strict && error(status)
             end
             try
                 γhats[:, i] .= value.(γ) # ITERATION_LIMIT
@@ -775,10 +777,12 @@ end
             # println("i = $i, obj_val = $obj_val")
             if status == MOI.NUMERICAL_ERROR
                 @debug "$status"
+                strict && error(status)
                 γhats[:, i] .= mean(y) / 2
             else
                 if !(status in [MOI.OPTIMAL, MOI.ALMOST_OPTIMAL])
                     @debug "$status"
+                    strict && error(status)
                 end
                 try
                     γhats[:, i] .= value.(γ)
@@ -808,10 +812,12 @@ end
             # println("i = $i, obj_val = $obj_val")
             if status == MOI.NUMERICAL_ERROR
                 @debug "$status"
+                strict && error(status)
                 γhats[:, i] .= mean(y) / 2
             else
                 if !(status in [MOI.OPTIMAL, MOI.ALMOST_OPTIMAL])
                     @debug "$status"
+                    strict && error(status)
                 end
                 γhats[:, i] .= value.(γ)
             end
@@ -824,13 +830,13 @@ end
     return γhats
 end
 
-function _optim!(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T}, s::Union{Nothing, Real}, γhat::AbstractVector{T}, H::AbstractMatrix{Int}; L = nothing, t = nothing, λ = nothing, μ = nothing, BarHomogeneous = false) where T <: AbstractFloat
+function _optim!(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T}, s::Union{Nothing, Real}, γhat::AbstractVector{T}, H::AbstractMatrix{Int}; L = nothing, t = nothing, λ = nothing, μ = nothing, BarHomogeneous = false, strict = false) where T <: AbstractFloat
     # construct constraint ‖ B(γ^u - γ^d) ‖ < s
     # model = Model(GLPK.Optimizer) # cannot do second order, throw error
     # `MOI.VectorAffineFunction{Float64}`-in-`MOI.SecondOrderCone` constraints are not supported and cannot be bridged into supported constrained variables and constraints. See details below:
     model = Model(OPTIMIZER)
     if BarHomogeneous && typeof(model.moi_backend.optimizer).parameters[1] == Gurobi.Optimizer
-        set_optimizer_attribute(model, "BarHomogeneous", 1)
+        set_optimizer_attribute(model, "BarHomogeneous", 1) # only for gurobi
     end
     set_silent(model)
     @variable(model, γ[1:2J])
@@ -868,6 +874,7 @@ function _optim!(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T}, s::Union{No
     # end
     # end debug
     if status == MOI.NUMERICAL_ERROR
+        strict && error(status)
         if !BarHomogeneous # not yet try BarHomogeneous
             @debug "try BarHomogeneous to rerun NUMERICAL_ERROR"
             _optim!(y, J, B, s, γhat, H, L = L, t = t, λ = λ, μ = μ, BarHomogeneous = true)
@@ -878,6 +885,7 @@ function _optim!(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T}, s::Union{No
     else
         if !(status in [MOI.OPTIMAL, MOI.ALMOST_OPTIMAL])
             @debug "$status"
+            strict && error(status)
         end
         try
             γhat .= value.(γ)
@@ -942,12 +950,12 @@ end
 
 Monotone decomposition with smoothing splines.
 """
-function mono_decomp_ss(workspace::WorkSpaceSS, x::AbstractVector{T}, y::AbstractVector{T}, λ::AbstractFloat, s::AbstractFloat; s_is_μ = true, prop_nknots = 1.0) where T <: AbstractFloat
+function mono_decomp_ss(workspace::WorkSpaceSS, x::AbstractVector{T}, y::AbstractVector{T}, λ::AbstractFloat, s::AbstractFloat; s_is_μ = true, prop_nknots = 1.0, strict = false) where T <: AbstractFloat
     build_model!(workspace, x, prop_nknots = prop_nknots)
     if s_is_μ
-        γhat = _optim(y, workspace.J, workspace.B, nothing, workspace.H, L = workspace.L, t = nothing, λ = λ, μ = s)
+        γhat = _optim(y, workspace.J, workspace.B, nothing, workspace.H, L = workspace.L, t = nothing, λ = λ, μ = s, strict = strict)
     else
-        γhat = _optim(y, workspace.J, workspace.B, s, workspace.H, L = workspace.L, t = nothing, λ = λ)
+        γhat = _optim(y, workspace.J, workspace.B, s, workspace.H, L = workspace.L, t = nothing, λ = λ, strict = strict)
     end
     # calculate properties of monotone decomposition
     J = workspace.J
@@ -1464,7 +1472,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, paras::AbstractMatrix
     return D, paras[:, 1], μerr, σerr
 end
 
-function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}, λ::AbstractVector{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), same_J_after_CV = true, prop_nknots = 1.0) where T <: AbstractFloat
+function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}, λ::AbstractVector{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), same_J_after_CV = true, prop_nknots = 1.0, include_boundary = false, strict = false) where T <: AbstractFloat
     n = length(x)
     folds = div_into_folds(n, K = nfold, seed = seed)
     nλ = length(λ)
@@ -1472,13 +1480,23 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}
     err = zeros(nfold, nμ, nλ)
     μs = repeat(μ, outer = nλ)
     λs = repeat(λ, inner = nμ)
+    il = argmin(x)
+    ir = argmax(x)
     # @showprogress "CV " for k = 1:nfold
     for k = 1:nfold
         test_idx = folds[k]
         train_idx = setdiff(1:n, test_idx)
+        if include_boundary ## see x^{1/3} in paper#12
+            train_idx = union(il, train_idx, ir)
+            test_idx = setdiff(1:n, train_idx)
+        end
         workspace = WorkSpaceSS()
         build_model!(workspace, x[train_idx], prop_nknots = prop_nknots)
-        γhats = _optim(y[train_idx], workspace.J, workspace.B, workspace.H, workspace.L, λs, μs)
+        γhats = try
+            _optim(y[train_idx], workspace.J, workspace.B, workspace.H, workspace.L, λs, μs, strict = strict)
+        catch e
+            error(e)
+        end
         ynews = predict(workspace, x[test_idx], γhats[1:workspace.J, :] + γhats[workspace.J+1:2workspace.J, :])
         for j = 1:nλ
             for i = 1:nμ
@@ -1503,7 +1521,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}
     nx_fold = rcopy(R".nknots.smspl($(n_fold))")
     nx = rcopy(R".nknots.smspl($(n))")    
     D = mono_decomp_ss(workspace, x, y, λ[ind[2]], μ[ind[1]], 
-                        prop_nknots = prop_nknots * ifelse(same_J_after_CV, nx_fold / nx, 1.0)) 
+                        prop_nknots = prop_nknots * ifelse(same_J_after_CV, nx_fold / nx, 1.0), strict = strict) 
     return D, μerr, σerr
 end
 
@@ -1521,7 +1539,7 @@ Cross-validation by Golden Section Searching `μ`` in `μrange` given `λ`.
 - If `λ_is_μ`, search `λ` in `μrange` given `λ (μ)`
 - Note that `one_se_rule` is not suitable for the golden section search.
 """
-function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λ::Real; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), tol = 1e-7, λ_is_μ = false, prop_nknots = 1.0) where T <: AbstractFloat
+function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λ::Real; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), tol = 1e-7, λ_is_μ = false, prop_nknots = 1.0, include_boundary = false) where T <: AbstractFloat
     τ = (sqrt(5) + 1) / 2
     μs = Float64[]
     errs = Float64[]
@@ -1536,13 +1554,13 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
     while true
         iter += 1
         ifigname = isnothing(figname) ? figname : figname[1:end-4] * "_$iter.png"
-        iter % 10 == 0 && @debug "iter = $iter: narrow $(ifelse(λ_is_μ, "λ", "μ")) into $([a, b])"
+        iter % 1 == 0 && @debug "iter = $iter: narrow $(ifelse(λ_is_μ, "λ", "μ")) into $([a, b])"
         c = b - (b - a) / τ
         d = a + (b - a) / τ
         if λ_is_μ
-            D, μerr, σerr = cvfit(x, y, [λ], [c, d], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots)
+            D, μerr, σerr = cvfit(x, y, [λ], [c, d], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary)
         else
-            D, μerr, σerr = cvfit(x, y, [c, d], [λ], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots)
+            D, μerr, σerr = cvfit(x, y, [c, d], [λ], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary)
         end
         append!(μs, [c, d])
         append!(errs, μerr)
@@ -1560,20 +1578,30 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
                 a = c
             end
         end
-        c = b - (b - a) / τ
-        d = a + (b - a) / τ
         if abs(b - a) < tol
             if λ_is_μ
                 flag = abs.(D.λ .- μrange[2]) / (μrange[2] - μrange[1]) < 1e-2
             else
                 flag = abs.(D.μ .- μrange[2]) / (μrange[2] - μrange[1]) < 1e-2
             end
+            # rerun the last iteration to guarantee the solution is feasible in strict mode
+            try
+                @debug "rerun cvfit to check feasibility"
+                if λ_is_μ
+                    D, μerr, σerr = cvfit(x, y, [λ], [c, d], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, strict = true)
+                else
+                    D, μerr, σerr = cvfit(x, y, [c, d], [λ], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, strict = true)
+                end        
+            catch e
+                @debug "the found solution is not feasible after reruning optimization in the strict mode..."
+                flag = true
+            end            
             if flag
                 # @warn "the optimal points near the right boundary"
-                @debug "the optimal points near the right boundary, try to extend the range..." # since in the log file the warn message is before other print message
+                @debug "the optimal points near the right boundary (or not feasible), try to extend the range..." # since in the log file the warn message is before other print message
                 # since 0.75 < 1 - 1e-2, so it is ok
-                left_new = μrange[1] + 0.75 * (μrange[2] - μrange[1])
-                right_new = μrange[2] * 2
+                left_new = μrange[1] + 0.75 * (μrange[2] - μrange[1])  # cannot larger than μrange[2]
+                right_new = μrange[2] * ifelse(μrange[2] > 1e-2, 2, 10)
                 return cvfit_gss(x, y, [left_new, right_new], λ, figname = figname, nfold = nfold, seed = seed, λ_is_μ = λ_is_μ, tol = tol, prop_nknots = prop_nknots)
             end
             ind = sortperm(μs)
@@ -1584,6 +1612,8 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
             end
             return D, μs[ind], errs[ind], σerrs[ind]
         end
+        c = b - (b - a) / τ
+        d = a + (b - a) / τ
     end
 end
 
