@@ -1554,7 +1554,7 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
     while true
         iter += 1
         ifigname = isnothing(figname) ? figname : figname[1:end-4] * "_$iter.png"
-        iter % 1 == 0 && @debug "iter = $iter: narrow $(ifelse(λ_is_μ, "λ", "μ")) into $([a, b])"
+        iter % 10 == 0 && @debug "iter = $iter: narrow $(ifelse(λ_is_μ, "λ", "μ")) into $([a, b])"
         c = b - (b - a) / τ
         d = a + (b - a) / τ
         if λ_is_μ

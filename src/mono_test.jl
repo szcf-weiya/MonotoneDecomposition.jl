@@ -465,13 +465,7 @@ function mono_test_bootstrap_sup(x::AbstractVector{T}, y::AbstractVector{T};
         ts = zeros(nrep)
         c = mean(D.yhat) / 2
         for i = 1:nrep
-            if nblock > 0
-                idx = block_bootstrap_idx(n; nblock = nblock)
-            else
-                idx = sample(1:n, n)
-            end
-            yi = D.workspace.B * D.γup .+ c + error[idx]
-            yi = yi .- mean(yi) .+ mean(y)
+            yi = construct_bootstrap_y(y, error, D.workspace.B, D.γup, c, nblock = nblock)
             Di = mono_decomp_cs(x, yi, s = μ, s_is_μ = true, J = J)
             # ts[i] = var(Di.γdown) / var(y - Di.yhat)
             ts[i] = var(Di.γdown) 
@@ -502,13 +496,31 @@ function block_bootstrap_idx(n::Int; nblock = 10)
     return idx
 end
 
-function block_bootstrap_idx(y::AbstractVector; nblock = 10)
-    n = length(y)
+function block_bootstrap_idx(e::AbstractVector; nblock = 10)
+    n = length(e)
     blocks = div_into_folds(n, K = nblock, seed = -1)
     idxs = [sample(b, length(b)) for b in blocks]
-    μ = vcat([mean(y[b]) * ones(length(b)) for b in idxs]...)
+    μb = vcat([mean(e[b]) * ones(length(b)) for b in blocks]...)
+    μi = vcat([mean(e[b]) * ones(length(b)) for b in idxs]...)
     idx = vcat(idxs...)
-    return idx, μ
+    return idx, μb, μi
+end
+
+function construct_bootstrap_y(y::AbstractVector{T}, e::AbstractVector{T}, B::AbstractMatrix{T}, γ::AbstractVector{T}, c::T; nblock = -1) where T <: AbstractFloat
+    n = length(y)
+    if nblock > 0
+        idx, μb, μi = block_bootstrap_idx(e; nblock = nblock)
+        ei = e[idx] - μi + μb
+    elseif nblock == 0
+        ei = randn(n) * std(e)
+        ei = ei .- mean(ei) .+ mean(e)
+    else
+        idx = sample(1:n, n)
+        ei = e[idx] .- mean(e[idx]) .+ mean(e)
+    end
+    yi = B * γ .+ c + ei
+    yi = yi .- mean(yi) .+ mean(y) 
+    return yi
 end
 
 function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T}; 
@@ -547,19 +559,14 @@ function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T};
         D = mono_decomp_ss(res.workspace, x, y, res.λ, μ)
         error = y - D.yhat
         μe = mean(error)
+        σe = std(error)
         ts = zeros(nrep)
         c = mean(D.yhat) / 2
         tobs = opstat(D.γdown)
+        @debug "σe = $σe"
         # tobs = sum((D.γdown .- c).^2)
         for i = 1:nrep
-            if nblock > 0
-                idx, μei = block_bootstrap_idx(y; nblock = nblock)
-            else
-                idx = sample(1:n, n)
-                μei = mean(error[idx]) * ones(n)
-            end
-            yi = res.workspace.B * D.γup .+ c + error[idx] - μei .+ μe
-            yi = yi .- mean(yi) .+ mean(y) # for block, it seems not wise to subtract mean(yi), instead, also block (introduce μei)
+            yi = construct_bootstrap_y(y, error, D.workspace.B, D.γup, c, nblock = nblock)
             Di = mono_decomp_ss(res.workspace, x, yi, res.λ, μ)
             # ts[i] = var(Di.γdown) / var(y - Di.yhat)
             ts[i] = opstat(Di.γdown)
