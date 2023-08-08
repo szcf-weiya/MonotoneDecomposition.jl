@@ -326,6 +326,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             method = "single_lambda", # fix_ratio, iter_search, grid_search
                                                             nk = 20, #used in fix_ratio
                                                             nλ = 10, rλ = 0.5, # used in grid_search
+                                                            rλs = nothing,
                                                             rel_tol = 1e-1, maxiter = 10, # iter_search
                                                             k_magnitude = 2,
                                                             seed = rand(UInt64),
@@ -387,10 +388,13 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
             end
         end
     else # grid_search
-        λs = range(1-rλ, 1+rλ, length = nλ) .* λ
+        if isnothing(rλs)
+            λs = range(1-rλ, 1+rλ, length = nλ) .* λ
+        else
+            λs = rλs .* λ
+        end
         verbose && @info "Smoothing Splines with grid-search λ ∈ $λs, μ ∈ $μrange"
-        seed = rand(UInt64)
-        D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λs, nfold = nfold, figname = figname, seed = seed, tol = tol, prop_nknots = prop_nknots)
+        D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λs, nfold = nfold, figname = figname, seed = seed, tol = tol, prop_nknots = prop_nknots, include_boundary = include_boundary)
     end
     if one_se_rule
         ind = cv_one_se_rule(errs, σerrs, small_is_simple = false)
@@ -1612,8 +1616,6 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
             end
             return D, μs[ind], errs[ind], σerrs[ind]
         end
-        c = b - (b - a) / τ
-        d = a + (b - a) / τ
     end
 end
 
@@ -1622,15 +1624,16 @@ end
 
 For each `λ` in `λs`, perform `cvfit(x, y, μrange, λ)`, and store the current best CV error. Finally, return the smallest one.
 """
-function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λs::AbstractVector{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), tol = 1e-7, λ_is_μ = false, prop_nknots = prop_nknots) where T <: AbstractFloat
+function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λs::AbstractVector{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), tol = 1e-7, prop_nknots = prop_nknots, include_boundary = false) where T <: AbstractFloat
     best_err = Inf
     D = nothing
     best_μs = nothing
     best_errs = nothing
     best_σerrs = nothing
-    for λ in λs
+    for (i, λ) in enumerate(λs)
+        ifigname = isnothing(figname) ? figname : figname[1:end-4] * "_lambda$i.png"
         @debug "given λ = $λ, search μ..."
-        Di, μi, erri, σerri = cvfit_gss(x, y, μrange, λ, nfold = nfold, figname = figname, seed = seed, tol = tol, prop_nknots = prop_nknots)
+        Di, μi, erri, σerri = cvfit_gss(x, y, μrange, λ, nfold = nfold, figname = ifigname, seed = seed, tol = tol, prop_nknots = prop_nknots, include_boundary = include_boundary)
         if best_err > minimum(erri)
             D = Di
             best_err = minimum(erri)
