@@ -516,6 +516,8 @@ function construct_bootstrap_y(y::AbstractVector{T}, e::AbstractVector{T}, B::Ab
         ei = ei .- mean(ei) .+ mean(e)
     elseif nblock == -1 # wild bootstrap
         ei = randn(n) .* e
+    elseif nblock == -2
+        ei = ifelse.(randn(n) .> 0, 1, -1) .* e
     else
         idx = sample(1:n, n)
         ei = e[idx] .- mean(e[idx]) .+ mean(e)
@@ -572,9 +574,12 @@ function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T};
             yi = construct_bootstrap_y(y, error, D.workspace.B, D.γup, c, nblock = nblock, σe = ifelse(use_σ_from_ss, σe0, σe))
             Di = mono_decomp_ss(res.workspace, x, yi, res.λ, μ)
             # ts[i] = var(Di.γdown) / var(y - Di.yhat)
+            # savefig(scatter(x, yi), "/tmp/toy-$i.png")
             ts[i] = opstat(Di.γdown)
             # ts[i] = sum((Di.γdown .- c).^2)
         end
+        # println(ts)
+        # println(tobs)
         # pval[k] = sum(ts .> tobs) / nrep
         append!(pval, sum(ts .> tobs) / nrep)
     end

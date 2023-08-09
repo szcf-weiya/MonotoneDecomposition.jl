@@ -332,6 +332,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             seed = rand(UInt64),
                                                             prop_nknots = 1.0,
                                                             include_boundary = false,
+                                                            same_J_after_CV = false,
                                                             one_se_rule = false, kw...) where T <: AbstractFloat
     yhat, yhatnew, Ω, λ, spl, B = smooth_spline(x, y, x0, design_matrix = true, keep_stuff = true)
     γup, γdown = mono_decomp(rcopy(R"$spl$fit$coef"))
@@ -365,7 +366,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
             ## if needed, perform one se rule on the last iteration given lambda
             D1, μs, errs, σerrs = cvfit_gss(x, y, μrange, λ, nfold = nfold, 
                                             figname = isnothing(figname) ? figname : figname[1:end-4] * "$iter-mu.png", 
-                                            tol = tol, seed = seed, prop_nknots = prop_nknots)
+                                            tol = tol, seed = seed, prop_nknots = prop_nknots, same_J_after_CV = same_J_after_CV)
             μrange = [min(μrange[1], 0.5 * D1.μ), max(μrange[2], 2 * D1.μ)]
             # since D is not defined in the first iteration, so use `if..else`, and hence cannot use `ifelse`
             if iter == 1
@@ -378,7 +379,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
             # D, workspace = cvfit(x, y, D1.μ, λ, nfold = nfold, figname = figname, nλ = nλ, ρ = ρ)
             D, _ = cvfit_gss(x, y, λrange, D1.μ, nfold = nfold, 
                             figname = isnothing(figname) ? figname : figname[1:end-4] * "$iter-lam.png", 
-                            λ_is_μ = true, tol = tol, seed = seed, prop_nknots = prop_nknots)
+                            λ_is_μ = true, tol = tol, seed = seed, prop_nknots = prop_nknots, same_J_after_CV = same_J_after_CV)
             λrange = [min(λrange[1], 0.5 * D.λ), max(λrange[2], 2 * D.λ)]
             err_λ = abs(D.λ - D1.λ) / D.λ
             λ = D.λ # for next iteration
@@ -394,7 +395,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
             λs = rλs .* λ
         end
         verbose && @info "Smoothing Splines with grid-search λ ∈ $λs, μ ∈ $μrange"
-        D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λs, nfold = nfold, figname = figname, seed = seed, tol = tol, prop_nknots = prop_nknots, include_boundary = include_boundary)
+        D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λs, nfold = nfold, figname = figname, seed = seed, tol = tol, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV)
     end
     if one_se_rule
         ind = cv_one_se_rule(errs, σerrs, small_is_simple = false)
@@ -1543,7 +1544,7 @@ Cross-validation by Golden Section Searching `μ`` in `μrange` given `λ`.
 - If `λ_is_μ`, search `λ` in `μrange` given `λ (μ)`
 - Note that `one_se_rule` is not suitable for the golden section search.
 """
-function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λ::Real; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), tol = 1e-7, λ_is_μ = false, prop_nknots = 1.0, include_boundary = false) where T <: AbstractFloat
+function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λ::Real; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), tol = 1e-7, λ_is_μ = false, prop_nknots = 1.0, include_boundary = false, same_J_after_CV = false) where T <: AbstractFloat
     τ = (sqrt(5) + 1) / 2
     μs = Float64[]
     errs = Float64[]
@@ -1562,9 +1563,9 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
         c = b - (b - a) / τ
         d = a + (b - a) / τ
         if λ_is_μ
-            D, μerr, σerr = cvfit(x, y, [λ], [c, d], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary)
+            D, μerr, σerr = cvfit(x, y, [λ], [c, d], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV)
         else
-            D, μerr, σerr = cvfit(x, y, [c, d], [λ], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary)
+            D, μerr, σerr = cvfit(x, y, [c, d], [λ], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV)
         end
         append!(μs, [c, d])
         append!(errs, μerr)
@@ -1592,9 +1593,9 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
             try
                 @debug "rerun cvfit to check feasibility"
                 if λ_is_μ
-                    D, μerr, σerr = cvfit(x, y, [λ], [c, d], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, strict = true)
+                    D, μerr, σerr = cvfit(x, y, [λ], [c, d], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, strict = true, same_J_after_CV = same_J_after_CV)
                 else
-                    D, μerr, σerr = cvfit(x, y, [c, d], [λ], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, strict = true)
+                    D, μerr, σerr = cvfit(x, y, [c, d], [λ], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, strict = true, same_J_after_CV = same_J_after_CV)
                 end        
             catch e
                 @debug "the found solution is not feasible after reruning optimization in the strict mode..."
@@ -1606,7 +1607,7 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
                 # since 0.75 < 1 - 1e-2, so it is ok
                 left_new = μrange[1] + 0.75 * (μrange[2] - μrange[1])  # cannot larger than μrange[2]
                 right_new = μrange[2] * ifelse(μrange[2] > 1e-2, 2, 10)
-                return cvfit_gss(x, y, [left_new, right_new], λ, figname = figname, nfold = nfold, seed = seed, λ_is_μ = λ_is_μ, tol = tol, prop_nknots = prop_nknots)
+                return cvfit_gss(x, y, [left_new, right_new], λ, figname = figname, nfold = nfold, seed = seed, λ_is_μ = λ_is_μ, tol = tol, prop_nknots = prop_nknots, same_J_after_CV = same_J_after_CV)
             end
             ind = sortperm(μs)
             @debug "optimal $(ifelse(λ_is_μ, "λ", "μ")) = $(μs[end])" 
@@ -1624,7 +1625,7 @@ end
 
 For each `λ` in `λs`, perform `cvfit(x, y, μrange, λ)`, and store the current best CV error. Finally, return the smallest one.
 """
-function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λs::AbstractVector{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), tol = 1e-7, prop_nknots = prop_nknots, include_boundary = false) where T <: AbstractFloat
+function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λs::AbstractVector{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), tol = 1e-7, prop_nknots = prop_nknots, include_boundary = false, same_J_after_CV = false) where T <: AbstractFloat
     best_err = Inf
     D = nothing
     best_μs = nothing
@@ -1633,7 +1634,7 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
     for (i, λ) in enumerate(λs)
         ifigname = isnothing(figname) ? figname : figname[1:end-4] * "_lambda$i.png"
         @debug "given λ = $λ, search μ..."
-        Di, μi, erri, σerri = cvfit_gss(x, y, μrange, λ, nfold = nfold, figname = ifigname, seed = seed, tol = tol, prop_nknots = prop_nknots, include_boundary = include_boundary)
+        Di, μi, erri, σerri = cvfit_gss(x, y, μrange, λ, nfold = nfold, figname = ifigname, seed = seed, tol = tol, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV)
         if best_err > minimum(erri)
             D = Di
             best_err = minimum(erri)
