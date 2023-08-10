@@ -25,6 +25,7 @@ function gurobi()
     # find in https://github.com/jump-dev/Gurobi.jl/blob/master/src/gen91/libgrb_api.jl
     # and inspired by https://support.gurobi.com/hc/en-us/community/posts/4412624836753-Do-not-print-Set-parameter-Username-in-console
     GRBsetintparam(GRB_ENV, GRB_INT_PAR_OUTPUTFLAG, 0)
+    GRBsetintparam(GRB_ENV, GRB_INT_PAR_THREADS, 1)
     global OPTIMIZER = () -> Gurobi.Optimizer(GRB_ENV)
 end
 
