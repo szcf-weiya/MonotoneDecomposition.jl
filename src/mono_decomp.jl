@@ -840,7 +840,8 @@ function _optim!(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T}, s::Union{No
     # model = Model(GLPK.Optimizer) # cannot do second order, throw error
     # `MOI.VectorAffineFunction{Float64}`-in-`MOI.SecondOrderCone` constraints are not supported and cannot be bridged into supported constrained variables and constraints. See details below:
     model = Model(OPTIMIZER)
-    if BarHomogeneous && typeof(model.moi_backend.optimizer).parameters[1] == Gurobi.Optimizer
+    isgurobi = typeof(model.moi_backend.optimizer).parameters[1] == Gurobi.Optimizer
+    if BarHomogeneous && isgurobi
         set_optimizer_attribute(model, "BarHomogeneous", 1) # only for gurobi
     end
     set_silent(model)
@@ -880,11 +881,16 @@ function _optim!(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T}, s::Union{No
     # end debug
     if status == MOI.NUMERICAL_ERROR
         strict && error(status)
-        if !BarHomogeneous # not yet try BarHomogeneous
-            @debug "try BarHomogeneous to rerun NUMERICAL_ERROR"
-            _optim!(y, J, B, s, γhat, H, L = L, t = t, λ = λ, μ = μ, BarHomogeneous = true)
+        if isgurobi
+            if !BarHomogeneous # not yet try BarHomogeneous
+                @debug "try BarHomogeneous to rerun NUMERICAL_ERROR"
+                _optim!(y, J, B, s, γhat, H, L = L, t = t, λ = λ, μ = μ, BarHomogeneous = true)
+            else
+                @debug "$status after trying BarHomogeneous algorithm"
+                γhat .= mean(y) / 2
+            end
         else
-            @debug "$status after trying BarHomogeneous algorithm"
+            @debug status
             γhat .= mean(y) / 2
         end
     else

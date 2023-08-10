@@ -3,6 +3,8 @@ using LaTeXStrings
 using Serialization
 using MonotoneDecomposition
 
+gurobi()
+
 function postfix()
     timestamp = replace(strip(read(`date -Iseconds`, String)), ":" => "_")
     ## get current (if modified are not saved, parent) commit

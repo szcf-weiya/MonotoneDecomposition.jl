@@ -506,7 +506,7 @@ function block_bootstrap_idx(e::AbstractVector; nblock = 10)
     return idx, μb, μi
 end
 
-function construct_bootstrap_y(y::AbstractVector{T}, e::AbstractVector{T}, B::AbstractMatrix{T}, γ::AbstractVector{T}, c::T; nblock = -1, σe = std(e)) where T <: AbstractFloat
+function construct_bootstrap_y(y::AbstractVector{T}, e::AbstractVector{T}, B::AbstractMatrix{T}, γ::AbstractVector{T}, c::T; nblock = -1, σe = std(e), debias_mean_yi = true) where T <: AbstractFloat
     n = length(y)
     if nblock > 0
         idx, μb, μi = block_bootstrap_idx(e; nblock = nblock)
@@ -523,17 +523,20 @@ function construct_bootstrap_y(y::AbstractVector{T}, e::AbstractVector{T}, B::Ab
         ei = e[idx] .- mean(e[idx]) .+ mean(e)
     end
     yi = B * γ .+ c + ei
-    yi = yi .- mean(yi) .+ mean(y) 
+    if debias_mean_yi
+        yi = yi .- mean(yi) .+ mean(y) 
+    end
     return yi
 end
 
 function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T}; 
                                     nrep = 100, nμ = 10, nfold = 2, seed = rand(UInt64),
-                                    opstat::Function = var,
+                                    opstat::Union{String, Function} = var,
                                     md_method = "single_lambda",
                                     tol = 1e-7,
                                     nblock = 10,
                                     use_σ_from_ss = false,
+                                    debias_mean_yi = true,
                                     kw...
                                     ) where T <: Real
     # for block index
@@ -567,17 +570,38 @@ function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T};
         σe = std(error)
         ts = zeros(nrep)
         c = mean(D.yhat) / 2
-        tobs = opstat(D.γdown)
+        if isa(opstat, Function)
+            tobs = opstat(D.γdown)
+        else
+            tobs = sum((D.γdown .- c).^2)
+        end
         @debug "σe = $σe"
-        # tobs = sum((D.γdown .- c).^2)
         for i = 1:nrep
-            yi = construct_bootstrap_y(y, error, D.workspace.B, D.γup, c, nblock = nblock, σe = ifelse(use_σ_from_ss, σe0, σe))
-            Di = mono_decomp_ss(res.workspace, x, yi, res.λ, μ)
+            yi = construct_bootstrap_y(y, error, D.workspace.B, D.γup, c, nblock = nblock, 
+                                        σe = ifelse(use_σ_from_ss, σe0, σe),
+                                        debias_mean_yi = debias_mean_yi)
+            try
+                Di = mono_decomp_ss(res.workspace, x, yi, res.λ, μ, strict = true)                
+                if isa(opstat, Function)
+                    ts[i] = opstat(Di.γdown)
+                else
+                    ts[i] = sum((Di.γdown .- c).^2)
+                end
+            catch
+                @warn "due to error in optimization, assign test statistic as Inf"
+                # TODO: is Inf reasonable?
+                # alternatively, exclude Inf when calculting p-value
+                ts[i] = Inf
+            end
             # ts[i] = var(Di.γdown) / var(y - Di.yhat)
             # savefig(scatter(x, yi), "/tmp/toy-$i.png")
-            ts[i] = opstat(Di.γdown)
             # ts[i] = sum((Di.γdown .- c).^2)
         end
+        # if k == 2
+        #     fig = histogram(ts[.!isinf.(ts)])
+        #     vline!(fig, [tobs])
+        #     savefig(fig, "/tmp/mu.png")
+        # end
         # println(ts)
         # println(tobs)
         # pval[k] = sum(ts .> tobs) / nrep
