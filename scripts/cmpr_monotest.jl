@@ -3,7 +3,7 @@ using LaTeXStrings
 using Serialization
 using MonotoneDecomposition
 
-gurobi()
+gurobi(1)
 
 function postfix()
     timestamp = replace(strip(read(`date -Iseconds`, String)), ":" => "_")

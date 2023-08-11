@@ -19,13 +19,14 @@ import MonotoneSplines.pick_knots
 
 OPTIMIZER = ECOS.Optimizer
 
-function gurobi()
+# https://www.gurobi.com/documentation/current/refman/threads.html#parameter:Threads
+function gurobi(nthread::Int = 0)
     GRB_ENV = Gurobi.Env()
     # disable print of `set parameter ..`
     # find in https://github.com/jump-dev/Gurobi.jl/blob/master/src/gen91/libgrb_api.jl
     # and inspired by https://support.gurobi.com/hc/en-us/community/posts/4412624836753-Do-not-print-Set-parameter-Username-in-console
     GRBsetintparam(GRB_ENV, GRB_INT_PAR_OUTPUTFLAG, 0)
-    GRBsetintparam(GRB_ENV, GRB_INT_PAR_THREADS, 1)
+    GRBsetintparam(GRB_ENV, GRB_INT_PAR_THREADS, nthread)
     global OPTIMIZER = () -> Gurobi.Optimizer(GRB_ENV)
 end
 
@@ -102,8 +103,8 @@ Perform smoothing spline on `(x, y)`, and make predictions on `xnew`.
 
 Returns: `yhat`, `ynewhat`,....
 """
-function smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::AbstractVector{T}; keep_stuff = false, design_matrix = false) where T <: AbstractFloat
-    spl = R"smooth.spline($x, $y, keep.stuff = $keep_stuff)"
+function smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::AbstractVector{T}; keep_stuff = false, design_matrix = false, LOOCV = false) where T <: AbstractFloat
+    spl = R"smooth.spline($x, $y, keep.stuff = $keep_stuff, cv = $LOOCV)"
     Σ = nothing
     if keep_stuff
         Σ = recover(rcopy(R"$spl$auxM$Sigma"))
@@ -332,10 +333,11 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             k_magnitude = 2,
                                                             seed = rand(UInt64),
                                                             prop_nknots = 1.0,
+                                                            minmaxμ = 1e-4,
                                                             include_boundary = false,
                                                             same_J_after_CV = false,
                                                             one_se_rule = false, kw...) where T <: AbstractFloat
-    yhat, yhatnew, Ω, λ, spl, B = smooth_spline(x, y, x0, design_matrix = true, keep_stuff = true)
+    yhat, yhatnew, Ω, λ, spl, B = smooth_spline(x, y, x0, design_matrix = true, keep_stuff = true, LOOCV = true)
     γup, γdown = mono_decomp(rcopy(R"$spl$fit$coef"))
     s0 = norm(B * (γup .- γdown))
     s_residual = norm(y - yhat)^2
@@ -343,8 +345,10 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
     s_discrepancy = [max(eps(), min(s_residual, s_smoothness)) / 10^k_magnitude, 
                                 max(s_residual, s_smoothness) * 10^k_magnitude]
     μrange = s_discrepancy / s0^2
-    if μrange[2] < 1e-6 # cbrt of eps()
-        μrange[2] = 1e-6
+    verbose && @info "μrange for compatible terms: $μrange"
+    verbose && @info "s0 = $s0, s_residual = $s_residual, s_smoothness = $s_smoothness, s_discrepancy = $s_discrepancy"
+    if μrange[2] < minmaxμ # cbrt of eps()
+        μrange[2] = minmaxμ
     end
     verbose && @info "μrange: $μrange"
     if method == "single_lambda"
