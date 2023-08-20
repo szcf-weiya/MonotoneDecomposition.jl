@@ -104,6 +104,11 @@ Perform smoothing spline on `(x, y)`, and make predictions on `xnew`.
 Returns: `yhat`, `ynewhat`,....
 """
 function smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::AbstractVector{T}; keep_stuff = false, design_matrix = false, LOOCV = false) where T <: AbstractFloat
+    # if LOOCV
+    #     spl = R"smooth.spline($x, $y, keep.stuff = $keep_stuff, cv = TRUE)"
+    # else
+    #     spl = R"smooth.spline($x, $y, keep.stuff = $keep_stuff, cv = FALSE)"
+    # end
     spl = R"smooth.spline($x, $y, keep.stuff = $keep_stuff, cv = $LOOCV)"
     Σ = nothing
     if keep_stuff
@@ -388,7 +393,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
             λrange = [min(λrange[1], 0.5 * D.λ), max(λrange[2], 2 * D.λ)]
             err_λ = abs(D.λ - D1.λ) / D.λ
             λ = D.λ # for next iteration
-            @debug "iter = $iter, err_μ = $err_μ, err_λ = $err_λ"
+            @debug "iter = $iter, err_μ = $err_μ, err_λ = $err_λ, err_fit = $(minimum(errs))"
             if (iter > maxiter) | (max(err_λ, err_μ) < rel_tol)
                 break
             end
@@ -1555,22 +1560,28 @@ Cross-validation by Golden Section Searching `μ`` in `μrange` given `λ`.
 - If `λ_is_μ`, search `λ` in `μrange` given `λ (μ)`
 - Note that `one_se_rule` is not suitable for the golden section search.
 """
-function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λ::Real; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), tol = 1e-7, λ_is_μ = false, prop_nknots = 1.0, include_boundary = false, same_J_after_CV = false) where T <: AbstractFloat
+function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λ::Real; 
+                        nfold = 10, figname = "/tmp/cv_curve.png", 
+                        seed = rand(UInt64), 
+                        # relative tolerance
+                        tol = 1e-4, tol_boundary = 1e-2,
+                        λ_is_μ = false, prop_nknots = 1.0, 
+                        include_boundary = false, same_J_after_CV = false) where T <: AbstractFloat
     τ = (sqrt(5) + 1) / 2
     μs = Float64[]
     errs = Float64[]
     σerrs = Float64[]
     a = μrange[1]
     b = μrange[2]
+    δ = b - a # width of search region
     c = a
     d = b
-    tol = tol * max(1.0, b - a)
     @debug "search $(ifelse(λ_is_μ, "λ", "μ")) in $([a, b])"
     iter = 0
     while true
         iter += 1
         ifigname = isnothing(figname) ? figname : figname[1:end-4] * "_$iter.png"
-        iter % 10 == 0 && @debug "iter = $iter: narrow $(ifelse(λ_is_μ, "λ", "μ")) into $([a, b])"
+        iter % 1 == 0 && @debug "iter = $iter: narrow $(ifelse(λ_is_μ, "λ", "μ")) into $([a, b])"
         c = b - (b - a) / τ
         d = a + (b - a) / τ
         if λ_is_μ
@@ -1594,11 +1605,11 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
                 a = c
             end
         end
-        if abs(b - a) < tol
+        if (b - a) / δ < tol
             if λ_is_μ
-                flag = abs.(D.λ .- μrange[2]) / (μrange[2] - μrange[1]) < 1e-2
+                flag = abs.(D.λ .- μrange[2]) / δ < tol_boundary
             else
-                flag = abs.(D.μ .- μrange[2]) / (μrange[2] - μrange[1]) < 1e-2
+                flag = abs.(D.μ .- μrange[2]) / δ < tol_boundary
             end
             # rerun the last iteration to guarantee the solution is feasible in strict mode
             try
@@ -1616,7 +1627,9 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
                 # @warn "the optimal points near the right boundary"
                 @debug "the optimal points near the right boundary (or not feasible), try to extend the range..." # since in the log file the warn message is before other print message
                 # since 0.75 < 1 - 1e-2, so it is ok
-                left_new = μrange[1] + 0.75 * (μrange[2] - μrange[1])  # cannot larger than μrange[2]
+                #left_new = μrange[1] + 0.75 * (μrange[2] - μrange[1])  # cannot larger than μrange[2]
+                ## a possible issue: μrange[2] can be large after multiplying 10 or 2, and then left_new can also become large, then the total search region would be shifted to the right, it might miss the left part. An extreme case might be it always shifts to the right.
+                left_new = μrange[1] # always keep the left range
                 right_new = μrange[2] * ifelse(μrange[2] > 1e-2, 2, 10)
                 return cvfit_gss(x, y, [left_new, right_new], λ, figname = figname, nfold = nfold, seed = seed, λ_is_μ = λ_is_μ, tol = tol, prop_nknots = prop_nknots, same_J_after_CV = same_J_after_CV)
             end

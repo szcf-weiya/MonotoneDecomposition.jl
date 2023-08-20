@@ -533,8 +533,8 @@ function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T};
                                     nrep = 100, nμ = 10, nfold = 2, seed = rand(UInt64),
                                     opstat::Union{String, Function} = var,
                                     md_method = "single_lambda",
-                                    tol = 1e-7,
-                                    nblock = 10,
+                                    tol = 1e-4,
+                                    nblock = -1,
                                     use_σ_from_ss = false,
                                     debias_mean_yi = true,
                                     kw...
