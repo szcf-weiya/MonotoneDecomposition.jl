@@ -5,9 +5,9 @@ using MonotoneDecomposition
 @testset "simple examples" begin
     x = randn(100)
     #@test !MonotoneDecomposition.mono_test(x, x)
-    @test !MonotoneDecomposition.mono_test_bootstrap_supss(x, x)
+    @test !MonotoneDecomposition.mono_test_bootstrap_supss(x, x)[2]
     #@test MonotoneDecomposition.mono_test(x, x.^2)
-    @test MonotoneDecomposition.mono_test_bootstrap_supss(x, x.^2)
+    @test MonotoneDecomposition.mono_test_bootstrap_supss(x, x.^2)[2]
 end
 
 @testset "ghosal constant" begin
