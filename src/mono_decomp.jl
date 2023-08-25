@@ -125,6 +125,38 @@ function smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abstrac
     return rcopy(R"predict($spl, $x)$y"), rcopy(R"predict($spl, $xnew)$y"), Σ, λ, spl, B, coef
 end
 
+function cv_smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, λs::AbstractVector{T}; nfold = 5, seed = rand(UInt64)) where T <: Real
+    n = length(x)
+    folds = div_into_folds(n, K = nfold, seed = seed)
+    nλ = length(λs)
+    errs = zeros(nfold, nλ)
+    for k in 1:nfold
+        test_idx = folds[k]
+        train_idx = setdiff(1:n, test_idx)
+        for (i, λ) in enumerate(λs)
+            spl = R"smooth.spline($(x[train_idx]), $(y[train_idx]), lambda = $λ)"
+            yhat = rcopy(R"predict($spl, $(x[test_idx]))$y")
+            errs[k, i] = norm(yhat - y[test_idx])^2 / length(test_idx)
+        end
+    end
+    μerr = dropdims(mean(errs, dims = 1), dims = 1)
+    ind = argmin(μerr)
+    if ind == nλ
+        @warn "the optimal is on the right boundary of λs"
+    elseif ind == 1
+        @warn "the optimal is on the left boundary of λs"
+    end
+    λopt = λs[ind]
+    spl = R"smooth.spline($x, $y, lambda = $λopt, keep.stuff = TRUE)"
+    Σ = recover(rcopy(R"$spl$auxM$Sigma"))
+    knots = rcopy(R"$spl$fit$knot")[4:end-3]
+    bbasis = R"fda::create.bspline.basis(breaks = $knots, norder = 4)"
+    B = rcopy(R"predict($bbasis, $knots)")
+    λ = rcopy(R"$spl$lambda")
+    coef = rcopy(R"$spl$fit$coef")
+    return rcopy(R"predict($spl, $x)$y"), Σ, λ, spl, B, coef, μerr
+end
+
 """
     mono_decomp_cs(x::AbstractVector, y::AbstractVector)
 
@@ -341,9 +373,12 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             minmaxμ = 1e-4,
                                                             include_boundary = false,
                                                             same_J_after_CV = false,
+                                                            λs_in_ss = 10.0 .^ (-16:0.25:2),
                                                             one_se_rule = false, kw...) where T <: AbstractFloat
-    yhat, yhatnew, Ω, λ, spl, B = smooth_spline(x, y, x0, design_matrix = true, keep_stuff = true, LOOCV = true)
-    γup, γdown = mono_decomp(rcopy(R"$spl$fit$coef"))
+    # yhat, yhatnew, Ω, λ, spl, B = smooth_spline(x, y, x0, design_matrix = true, keep_stuff = true, LOOCV = true)
+    yhat, Ω, λ, spl, B, γss = cv_smooth_spline(x, y, λs_in_ss, nfold = nfold, seed = seed)
+    yhatnew = rcopy(R"predict($spl, $x0)$y")
+    γup, γdown = mono_decomp(γss)
     s0 = norm(B * (γup .- γdown))
     s_residual = norm(y - yhat)^2
     s_smoothness = λ * (γup .+ γdown)' * Ω * (γup .+ γdown)
