@@ -361,6 +361,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             verbose = true,
                                                             nfold = 10, 
                                                             tol = 1e-7,
+                                                            tol_boundary = 1e-1,
                                                             x0 = x, # test point of x
                                                             method = "single_lambda", # fix_ratio, iter_search, grid_search
                                                             nk = 20, #used in fix_ratio
@@ -443,7 +444,8 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
             λs = rλs .* λ
         end
         verbose && @info "Smoothing Splines with grid-search λ ∈ $λs, μ ∈ $μrange"
-        D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λs, nfold = nfold, figname = figname, seed = seed, tol = tol, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV,
+        D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λs, nfold = nfold, figname = figname, seed = seed, tol = tol, 
+        tol_boundary = tol_boundary, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV,
         log_scale = search_μ_in_log_scale, rerun_check = rerun_check)
     end
     if one_se_rule
@@ -1658,11 +1660,8 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
             end
         end
         if (b - a) / δ < tol
-            if λ_is_μ
-                flag = abs.(D.λ .- μright) / δ < tol_boundary
-            else
-                flag = abs.(D.μ .- μright) / δ < tol_boundary
-            end
+            @debug "μright = $μright, a = $a, δ = $δ, gap = $((μright - a) / δ), tol_boundary = $tol_boundary"
+            flag = (μright - a) / δ < tol_boundary
             # rerun the last iteration to guarantee the solution is feasible in strict mode
             # not necessary? since some fit is indeed terrible, just return a bad fit (the constant fit)
             if rerun_check
@@ -1686,7 +1685,7 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
                 ## a possible issue: μrange[2] can be large after multiplying 10 or 2, and then left_new can also become large, then the total search region would be shifted to the right, it might miss the left part. An extreme case might be it always shifts to the right.
                 left_new = μrange[1] # always keep the left range
                 right_new = μrange[2] * ifelse(μrange[2] > 1e-2, 2, 10)
-                return cvfit_gss(x, y, [left_new, right_new], λ, figname = figname, nfold = nfold, seed = seed, λ_is_μ = λ_is_μ, tol = tol, prop_nknots = prop_nknots, same_J_after_CV = same_J_after_CV, log_scale = log_scale)
+                return cvfit_gss(x, y, [left_new, right_new], λ, figname = figname, nfold = nfold, seed = seed, λ_is_μ = λ_is_μ, tol = tol, prop_nknots = prop_nknots, same_J_after_CV = same_J_after_CV, log_scale = log_scale, tol_boundary = tol_boundary)
             end
             ind = sortperm(μs)
             @debug "optimal $(ifelse(λ_is_μ, "λ", "μ")) = $(μs[end])" 
@@ -1706,7 +1705,8 @@ For each `λ` in `λs`, perform `cvfit(x, y, μrange, λ)`, and store the curren
 """
 function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::AbstractVector{T}, λs::AbstractVector{T}; 
                     nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), 
-                    tol = 1e-7, prop_nknots = prop_nknots, include_boundary = false, 
+                    tol = 1e-3, tol_boundary = 1e-1,
+                    prop_nknots = prop_nknots, include_boundary = false, 
                     rerun_check = true,
                     same_J_after_CV = false, log_scale = false) where T <: AbstractFloat
     best_err = Inf
@@ -1717,7 +1717,12 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
     for (i, λ) in enumerate(λs)
         ifigname = isnothing(figname) ? figname : figname[1:end-4] * "_lambda$i.png"
         @debug "given λ = $λ, search μ..."
-        Di, μi, erri, σerri = cvfit_gss(x, y, μrange, λ, nfold = nfold, figname = ifigname, seed = seed, tol = tol, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV, log_scale = log_scale, rerun_check = rerun_check)
+        Di, μi, erri, σerri = cvfit_gss(x, y, μrange, λ, nfold = nfold, figname = ifigname, seed = seed, tol = tol,
+                                            tol_boundary = tol_boundary,
+                                            prop_nknots = prop_nknots, 
+                                            include_boundary = include_boundary, 
+                                            same_J_after_CV = same_J_after_CV, 
+                                            log_scale = log_scale, rerun_check = rerun_check)
         if best_err > minimum(erri)
             D = Di
             best_err = minimum(erri)
