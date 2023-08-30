@@ -1685,7 +1685,7 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
                 ## a possible issue: μrange[2] can be large after multiplying 10 or 2, and then left_new can also become large, then the total search region would be shifted to the right, it might miss the left part. An extreme case might be it always shifts to the right.
                 left_new = μrange[1] # always keep the left range
                 right_new = μrange[2] * ifelse(μrange[2] > 1e-2, 2, 10)
-                return cvfit_gss(x, y, [left_new, right_new], λ, figname = figname, nfold = nfold, seed = seed, λ_is_μ = λ_is_μ, tol = tol, prop_nknots = prop_nknots, same_J_after_CV = same_J_after_CV, log_scale = log_scale, tol_boundary = tol_boundary)
+                return cvfit_gss(x, y, [left_new, right_new], λ, figname = figname, nfold = nfold, seed = seed, λ_is_μ = λ_is_μ, tol = tol, prop_nknots = prop_nknots, same_J_after_CV = same_J_after_CV, log_scale = log_scale, tol_boundary = tol_boundary, rerun_check = rerun_check)
             end
             ind = sortperm(μs)
             @debug "optimal $(ifelse(λ_is_μ, "λ", "μ")) = $(μs[end])" 
