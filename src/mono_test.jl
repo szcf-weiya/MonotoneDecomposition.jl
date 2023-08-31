@@ -192,23 +192,13 @@ function single_test_compare_bowman(;
         for (k, n) in enumerate(ns)
             for (l, σ) in enumerate(σs)
                 x, y = gen_data_bowman(a = a, n = n, σ = σ)
-                # props[j, k, l, 1] = mono_test(x, y)
-                # props[j, k, l, 1:5] .= mono_test_bootstrap(x, y, data_obey_H0 = false, one_se_rule=true)
-                # props[j, k, l, 6:10] .= mono_test_bootstrap_ss(x, y, data_obey_H0 = false, one_se_rule=true)
-                # props[j, k, l, 11:15] .= mono_test_bootstrap(x, y, data_obey_H0 = true, one_se_rule=true)
-                # props[j, k, l, 16:20] .= mono_test_bootstrap_ss(x, y, data_obey_H0 = true, one_se_rule=true)
-                # # props[j, k, l, 1] = mono_test_bootstrap(x, y)
-                # # props[j, k, l, 2] = mono_test_bootstrap_ss(x, y) # might be too slow
-                # props[j, k, l, 21] = meyer(x, y)
-                # props[j, k, l, 22] = ghosal_S1n(x, y, C_GHOSAL[n])
-                # props[j, k, l, 23] = bowman(x, y)
                 if !only_proposed
                     props[j, k, l, 1] = meyer(x, y)
                     props[j, k, l, 2] = ghosal(x, y)
                     props[j, k, l, 3] = bowman(x, y)
                 end
-                props[j, k, l, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5, kw...)
-                props[j, k, l, 7:9] .= mono_test_bootstrap_supss(x, y; nrep = nrep, nμ = 5, kw...)
+                props[j, k, l, 4:6] .= mono_test_bootstrap_cs(x, y; nrep = nrep, kw...)
+                props[j, k, l, 7:9] .= mono_test_bootstrap_ss(x, y; nrep = nrep, kw...)
             end
         end
     end
@@ -247,36 +237,8 @@ function single_test_compare_ghosal(;
                     props[i, k, j, 2] = ghosal(x, y)
                     props[i, k, j, 3] = bowman(x, y)
                 end
-                props[i, k, j, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5, kw...)
-                props[i, k, j, 7:9] .= mono_test_bootstrap_supss(x, y; nrep = nrep, nμ = 5, kw...)
-            end
-        end
-    end
-    return props
-end
-
-function single_test_compare_desc(;
-        # ns = [50, 100, 200]
-        ns = [200],
-        # σs = [0.025, 0.05, 0.1]
-        # σs = 10 .^ (-5:0.5:-1)
-        # σs = 10 .^ (-3:0.5:-1)
-        σs = [0.001, 0.01, 0.1],
-        nrep = 100
-    )
-    # proposed, ghosal, meyer, sm
-    props = zeros(length(ns), length(σs), 5, 15)
-    for (i, n) in enumerate(ns)
-        for (k, σ) in enumerate(σs)
-            x, m1, m2, m3, m4, m5 = gen_desc_data(n = n, σ = σ)
-            for (j, y) in enumerate([m1, m2, m3, m4, m5])
-                props[i, k, j, 1:3] = mono_test_bootstrap(x, y, data_obey_H0 = false, nrep = nrep)[1:3]
-                props[i, k, j, 4:6] = mono_test_bootstrap_ss(x, y, data_obey_H0 = false, nrep = nrep)[1:3]
-                props[i, k, j, 7:9] = mono_test_bootstrap(x, y, data_obey_H0 = true, nrep = nrep)[1:3]
-                props[i, k, j, 10:12] = mono_test_bootstrap_ss(x, y, data_obey_H0 = true, nrep = nrep)[1:3]
-                props[i, k, j, 13] = meyer(x, y)
-                props[i, k, j, 14] = ghosal(x, y)
-                props[i, k, j, 15] = bowman(x, y)
+                props[i, k, j, 4:6] .= mono_test_bootstrap_cs(x, y; nrep = nrep, kw...)
+                props[i, k, j, 7:9] .= mono_test_bootstrap_ss(x, y; nrep = nrep, kw...)
             end
         end
     end
@@ -300,139 +262,45 @@ function single_test_compare_mono(;
         for (k, σ) in enumerate(σs)
             x, m1, m2, m3, m4, m5 = gen_mono_data(n = n, σ = σ, equidistant = equidistant)
             for (j, y) in enumerate([m1, m2, m3, m4, m5])
-                # props[i, k, j, 1:5] = mono_test_bootstrap(x, y, data_obey_H0 = false, one_se_rule=true)
-                # props[i, k, j, 6:10] = mono_test_bootstrap_ss(x, y, data_obey_H0 = false, one_se_rule=true)
-                # props[i, k, j, 11:15] = mono_test_bootstrap(x, y, data_obey_H0 = true, one_se_rule=true)
-                # props[i, k, j, 16:20] = mono_test_bootstrap_ss(x, y, data_obey_H0 = true, one_se_rule=true)
-                # props[i, k, j, 21] = meyer(x, y)
-                # props[i, k, j, 22] = ghosal_S1n(x, y, C_GHOSAL[n])
-                # props[i, k, j, 23] = bowman(x, y)
                 if !only_proposed
                     props[i, k, j, 1] = meyer(x, y)
                     props[i, k, j, 2] = ghosal(x, y)
                     props[i, k, j, 3] = bowman(x, y)
                 end
-                props[i, k, j, 4:6] .= mono_test_bootstrap_sup(x, y; nrep = nrep, nμ = 5, kw...)
-                props[i, k, j, 7:9] .= mono_test_bootstrap_supss(x, y; nrep = nrep, nμ = 5, kw...)
+                props[i, k, j, 4:6] .= mono_test_bootstrap_cs(x, y; nrep = nrep, kw...)
+                props[i, k, j, 7:9] .= mono_test_bootstrap_ss(x, y; nrep = nrep, kw...)
             end
         end
     end
     return props
 end
 
-function mono_test_bootstrap(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, debug = false, data_obey_H0 = false, one_se_rule = false) where T <: Real
-    # x, y = gen_data(a = 0.15, σ = 0.025)
-    # J, μ, res = cvMBspl(x, y, x, Js = 4:30, ss = 10.0 .^ (-6:0.5:-1))
-    n = length(y)
-    # J, μ, res = cvMBspl(x, y, x, Js = 4:30, ss = 10.0 .^ (-6:0.5:0), one_se_rule = true)
-    res, μ, μs = cv_mono_decomp_cs(x, y, ss = 10.0 .^ (-6:0.5:6), one_se_rule = one_se_rule, fixJ = true)
-    J = res.workspace.J
+function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, 
+                                            μs = 10.0 .^ (-6:0.1:2), Js = 4:20, fixJ = false,
+                                            nblock = -1, # wild bootstrap
+                                            one_se_rule = false, kw...) where T <: Real
+    D, μ, μs = cv_mono_decomp_cs(x, y, ss = μs, one_se_rule = one_se_rule, fixJ = fixJ, Js = Js)
+    J = D.workspace.J
     # scatter(x, y)
     # plot!(x, res.yhat)
-    c = mean(res.yhat) / 2
-    error = y - res.yhat
+    c = mean(D.yhat) / 2
+    error = y - D.yhat
     # σ = std(err)
-    tobs = sum((res.γdown .- c).^2)
-    # tobs = var(res.γdown)
+    tobs = var(D.γdown)
     ts = zeros(nrep)
-    ts2 = zeros(nrep)
-    ts3 = zeros(nrep)
-    ts4 = zeros(nrep)
-    ts5 = zeros(nrep)
-    tobs3 = tobs
-    # tobs4 = maximum(res.γdown) - minimum(res.γdown)
-    tobs4 = var(res.γdown)
-    tobs5 = var(res.γdown) / var(y - res.yhat)
-    # tobs_up = var(res.γup)
-    tobs_up = sum((res.γup .- c).^2)
-    ts_up = zeros(nrep)
-    if debug
-        γsdown = zeros(J, nrep+1)
-        γsdown[:, 1] = res.γdown
-    end
     for i = 1:nrep
-        idx = sample(1:n, n)
-        if data_obey_H0
-            yi = res.workspace.B * res.γup .+ c + error[idx]
-        else
-            yi = res.yhat + error[idx]
-        end
-        # if tobs < tobs_up
-        #     yi = res.B * res.γup .+ c + error[idx]
-        # else
-        #     yi = res.B * res.γdown .+ c + error[idx]
-        # end
-        yi = yi .- mean(yi) .+ mean(y) # Note that mean(yi) = mean(res.yhat) / 2 + c + mean(error[idx])
-        # so it is equivalent to -mean(err[idx]) + mean(err[idx])
-        # yi = res.B * res.γup .+ c + randn(n) * σ
-        Di = mono_decomp_cs(x, yi, s = μ, s_is_μ = true, J = J)
-        # _, _, Di = cvMBspl(x, y, x, Js = J, ss = range(0.1μ, 2μ, length=10))
-        # ts[i] = sum((Di.γdown .- c).^2) / var(y - Di.yhat)
-        # if data_obey_H0
-        #     ts[i] = sum((Di.γdown - res.γdown ).^2)
-        # else
-        #     ts[i] = sum((Di.γdown .- mean(Di.yhat) / 2 - (res.γdown .- c) ).^2)
-        # end
-        ts[i] = sum((Di.γdown .- c ).^2)
-        ts2[i] = sum((Di.γdown .- mean(Di.yhat) / 2 - (res.γdown .- c) ).^2)
-        # ts3[i] = abs( sum((Di.γdown .- mean(Di.yhat) / 2).^2) - tobs3 )
-        # ts4[i] = abs(maximum(Di.γdown) - minimum(Di.γdown) - tobs4)
-        # ts5[i] = abs(var(Di.γdown) - tobs5)
-        # ts3[i] = sum((Di.γdown .- mean(Di.yhat) / 2).^2) - tobs3
-        # ts4[i] = maximum(Di.γdown) - minimum(Di.γdown) - tobs4
-        # ts5[i] = var(Di.γdown) - tobs5
-        ts3[i] = sum((Di.γdown .- mean(Di.yhat) / 2).^2)
-        # ts4[i] = maximum(Di.γdown) - minimum(Di.γdown)
-        ts4[i] = var(Di.γdown)
-        ts5[i] = var(Di.γdown) / var(y - Di.yhat)
-        # ts3[i] = sum((Di.γup + Di.γdown - res.γup .- mean(Di.yhat) / 2).^2)
-        # ts4[i] = maximum(Di.γup + Di.γdown - res.γup) - minimum(Di.γup + Di.γdown - res.γup)
-        # ts5[i] = var(Di.γup + Di.γdown - res.γup)
-        # ts[i] = var(Di.γdown)
-
-        # yi_up = error[idx]
-        # _, _, Di = monoBspl(J)(x, yi_up, x, s = μ, s_is_μ = true)
-        # ts_up[i] = var(Di.γup)
-        # ts_up[i] = sum((Di.γup .- c).^2)
-        # ti_up = sum((Di.γup .- mean(Di.yhat)/2 ).^2)
-        # ti_down = sum((Di.γdown .- mean(Di.yhat)/2 ).^2)
-        # if ti_down < ti_up
-        #     if tobs < tobs_up
-        #         ts2[i] = sum((Di.γdown .- mean(Di.yhat) / 2 - (res.γdown .- c)).^2)
-        #     else
-        #         ts2[i] = sum((Di.γdown .- mean(Di.yhat) / 2 - (res.γup .- c)).^2)
-        #     end
-        # else
-        #     if tobs < tobs_up
-        #         ts2[i] = sum((Di.γup .- mean(Di.yhat) / 2 - (res.γdown .- c)).^2)
-        #     else
-        #         ts2[i] = sum((Di.γup .- mean(Di.yhat) / 2 - (res.γup .- c)).^2)
-        #     end
-        # end
-        if debug
-            γsdown[:, i+1] = Di.γdown
+        yi = construct_bootstrap_y(y, error, D.workspace.B, D.γup, c, nblock = nblock)
+        try
+            Di = mono_decomp_cs(x, yi, s = μ, s_is_μ = true, J = J)
+            ts[i] = var(Di.γdown)
+        catch
+            @warn "due to error in optimization, assign test statistic as Inf"
+            ts[i] = Inf
         end
     end
-    if debug
-        return ts, ts_up, tobs, tobs_up, γsdown
-    end
-    # pval = sum( (ts .> tobs) .| (ts_up .< tobs_up) ) / nrep
-    # pval = 1 - sum( (ts .< tobs) .* (ts_up .> tobs) ) / nrep
-    # pval = 1 - sum( (ts .< tobs) .* (ts_up .> ts) ) / nrep
-    # println("tobs = $tobs, tobs_up = $tobs_up")
-    # if tobs < tobs_up
-    #     pval = 1 - sum( (ts .< tobs) ) / nrep
-    # else
-    #     pval = 1 - sum( (ts_up .< tobs_up) ) / nrep
-    # end
-    # pval = 1 - sum( (min.(ts, ts_up) .< min(tobs, tobs_up) ) ) / nrep
-    # pval = sum(ts2 .> min(tobs, tobs_up)) / nrep
     pval = sum(ts .> tobs) / nrep
-    pval2 = sum(ts2 .> tobs) / nrep
-    pval3 = sum(ts3 .> tobs3) / nrep
-    pval4 = sum(ts4 .> tobs4) / nrep
-    pval5 = sum(ts5 .> tobs5) / nrep
-    return [pval < 0.05, pval2 < 0.05, pval3 < 0.05, pval4 < 0.05, pval5 < 0.05]
+    @debug "pval = $pval"
+    return pval < 0.05
 end
 
 function mono_test_bootstrap_sup(x::AbstractVector{T}, y::AbstractVector{T}; 
@@ -478,6 +346,7 @@ function mono_test_bootstrap_sup(x::AbstractVector{T}, y::AbstractVector{T};
     # if length(pval) == 0
     #     @warn "$ρ is too small, and no mono decomp satisfies the condition"
     # end
+    @debug "pval = $pval"
     return [maximum(pval) < 0.05, pval[end] < 0.05, pval[end-1] < 0.05]
 end
 
@@ -616,167 +485,38 @@ function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T};
     return [maximum(pval) < 0.05, pval[end] < 0.05, pval[end-1] < 0.05]
 end
 
-function mono_test_bootstrap_ss(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, debug = false, data_obey_H0 = false, one_se_rule = false) where T <: Real
-    n = length(y)
-    res, _ = cv_mono_decomp_ss(x, y, one_se_rule = one_se_rule)
-    # res, workspace = cvMSS(x, y)
-    # J, μ, res = cvMBspl_fixJ(x, y, ss = 10.0 .^ (-6:0.2:0), one_se_rule = true, nfold = n)
-    # scatter(x, y)
-    # plot!(x, res.yhat)
-    c = mean(res.yhat) / 2
-    error = y - res.yhat
-    σ = std(error)
-    # println("c = $c, μup = ", mean(workspace.B * res.γup), "μdown = ", mean(workspace.B * res.γdown))
-    # ϵ = mean(workspace.B * res.γup - workspace.B * res.γdown) / 2
-    # tobs = sum((res.γdown .+ ϵ  .- c).^2)
-    # tobs = sum((workspace.B * res.γdown .+ ϵ  .- c).^2)
-    tobs = sum((res.γdown .- c).^2)
-    # tobs = var(res.γdown)
-    ts = zeros(nrep)
-    ts2 = zeros(nrep)
-    ts3 = zeros(nrep)
-    ts4 = zeros(nrep)
-    ts5 = zeros(nrep)
-    tobs3 = tobs
-    tobs4 = maximum(res.γdown) - minimum(res.γdown)
-    tobs5 = var(res.γdown)
-    # tobs5 = var(res.γdown) / var(y - res.yhat)
-    # tobs_up = sum((res.γup .- ϵ .- c).^2)
-    # tobs_up = sum((workspace.B * res.γup .- ϵ .- c).^2)
-    tobs_up = sum((res.γup .- c).^2)
-    println("λ = ", res.λ, " μ = ", res.μ, " t1 = ", tobs)
-    # tobs_up = var(res.γup)
-    ts_up = zeros(nrep)
-    if debug
-        γsdown = zeros(length(res.γdown), nrep+1)
-        γsdown[:, 1] = res.γdown
-    end
-    for i = 1:nrep
-        idx = sample(1:n, n)
-        if data_obey_H0
-            yi = res.workspace.B * res.γup .+ c + error[idx]
-        else
-            yi = res.yhat + error[idx]
-        end
-        # # if tobs < tobs_up
-        # yi = workspace.B * res.γup .+ c + error[idx]
-        # if var(res.γdown) < var(res.γup)
-        # # if rand() < 0.5
-        #     yi = workspace.B * res.γup .+ c + error[idx]
-        # else
-        #     yi = workspace.B * res.γdown .+ c + error[idx]
-        # end
-        yi = yi .- mean(yi) .+ mean(y) # Note that mean(yi) = mean(res.yhat) / 2 + c + mean(error[idx])
-        # so it is equivalent to -mean(err[idx]) + mean(err[idx])
-        # yi = res.B * res.γup .+ c + randn(n) * σ
-        Di = mono_decomp_ss(res.workspace, x, yi, res.λ, res.μ)
-        # ϵi = mean(workspace.B * Di.γup - workspace.B * Di.γdown) / 2
-        # _, _, Di = cvMBspl(x, y, x, Js = J, ss = range(0.1μ, 2μ, length=10))
-        # ts[i] = sum((Di.γdown .- c).^2) / var(y - Di.yhat)
-        # ts[i] = sum((Di.γdown .- c).^2)
-        # ts[i] = sum((Di.γdown .+ ϵi .- mean(Di.yhat) / 2 - (res.γdown .- c)).^2)
-        ts[i] = sum((Di.γdown .- c).^2)
-        ts2[i] = sum((Di.γdown .- mean(Di.yhat) / 2 - (res.γdown .- c)).^2)
-        # ts3[i] = sum((Di.γdown - res.γdown ).^2)
-        # ts3[i] = abs( sum((Di.γdown .- mean(Di.yhat) / 2).^2) - tobs3 )
-        # ts4[i] = abs(maximum(Di.γdown) - minimum(Di.γdown) - tobs4)
-        # ts5[i] = abs(var(Di.γdown) - tobs5)
-        ts3[i] = sum((Di.γdown .- mean(Di.yhat) / 2).^2)
-        ts4[i] = maximum(Di.γdown) - minimum(Di.γdown)
-        # ts4[i] = var(Di.γdown) 
-        ts5[i] = var(Di.γdown) #/ var(y - Di.yhat)
-        # ts3[i] = sum((Di.γhat - res.γup .- mean(Di.yhat) / 2).^2)
-        # ts4[i] = maximum(Di.γhat - res.γup) - minimum(Di.γhat - res.γup)
-        # ts5[i] = var(Di.γhat - res.γup)
-        # ts3[i] = sum((Di.γdown .- mean(Di.yhat) / 2).^2) - tobs3
-        # ts4[i] = maximum(Di.γdown) - minimum(Di.γdown) - tobs4
-        # ts5[i] = abs(var(Di.γdown) - tobs5)
-        # if data_obey_H0
-        #     ts[i] = sum((Di.γdown .- c).^2)
-        # else
-        #     ts[i] = sum((Di.γdown .- mean(Di.yhat) / 2 - (res.γdown .- c)).^2)
-        # end
-        # ts[i] = sum((Di.γdown .- mean(Di.γdown) - (res.γdown .- mean(res.γdown))).^2)
-        # ts[i] = var(Di.γdown)
+"""
+    mono_test_bootstrap_ss(x, y)
 
-        # yi_up = error[idx]
-        # _, _, Di = monoBspl(J)(x, yi_up, x, s = μ, s_is_μ = true)
-        # ts_up[i] = sum((Di.γup .- c).^2)
-        # ts_up[i] = sum((Di.γup .- ϵi .- mean(Di.yhat) / 2 - (res.γup .- c)).^2)
-        # ts_up[i] = sum((Di.γup .- mean(Di.yhat) / 2 - (res.γup .- c)).^2)
-        # ts_up[i] = sum((Di.γup .- mean(Di.γup) - (res.γup .- mean(res.γup))).^2)
-        # ts_up[i] = var(Di.γdown)
-        # if var(Di.γdown) < var(Di.γup) # !!!NB: the variance is not exactly the same as ‖ γ - c ‖ since c is the mean of yhat instead of the mean of γ
-        ## TODO: discuss the difference between var and c
-        # ti_up = sum((Di.γup .- mean(Di.yhat)/2 ).^2)
-        # ti_down = sum((Di.γdown .- mean(Di.yhat)/2 ).^2)
-        # ti_up = sum((workspace.B * Di.γup .- ϵi .- mean(Di.yhat)/2 ).^2)
-        # ti_down = sum((workspace.B * Di.γdown .+ ϵi .- mean(Di.yhat)/2 ).^2)
-        # ti_up = var(Di.γup)
-        # ti_down = var(Di.γdown)
-        # ts2[i] = min(var(Di.γup), var(Di.γdown))
-        # if ti_down < ti_up
-        # if var(Di.γdown) < var(Di.γup)
-        #     # if tobs < tobs_up
-        #     if var(res.γdown) < var(res.γup)
-        #         # ts2[i] = sum((Di.γdown .+ ϵi .- mean(Di.yhat) / 2 - (res.γdown .+ ϵ .- c)).^2)
-        #         ts2[i] = sum((Di.γdown .- mean(Di.yhat) / 2 - (res.γdown .- c)).^2)
-        #         # ts2[i] = sum((Di.γhat - res.γup .- mean(Di.yhat) / 2 - (res.γdown .- c)).^2)
-        #         # ts2[i] = sum((workspace.B * Di.γdown .+ ϵi .- mean(Di.yhat) / 2 - (workspace.B * res.γdown .+ ϵ .- c)).^2)
-        #         # ts2[i] = sum((Di.γdown - res.γdown).^2)
-        #         # ts2[i] = sum((Di.γdown .- mean(Di.γdown) - (res.γdown .- mean(res.γdown))).^2)
-        #     else
-        #         # ts2[i] = sum((Di.γdown .+ ϵi .- mean(Di.yhat) / 2 - (res.γup .- ϵ .- c)).^2)
-        #         ts2[i] = sum((Di.γdown .- mean(Di.yhat) / 2 - (res.γup .- c)).^2)
-        #         # ts2[i] = sum((Di.γhat - res.γup .- mean(Di.yhat) / 2 - (res.γup .- c)).^2)
-        #         # ts2[i] = sum((workspace.B * Di.γdown .+ ϵi .- mean(Di.yhat) / 2 - (workspace.B * res.γup .- ϵ .- c)).^2)
-        #         # ts2[i] = sum((Di.γdown - res.γup).^2)
-        #         # ts2[i] = sum((Di.γdown .- mean(Di.γdown) - (res.γup .- mean(res.γup))).^2)
-        #     end
-        # else
-        #     if tobs < tobs_up
-        #         # ts2[i] = sum((Di.γup .- ϵi .- mean(Di.yhat) / 2 - (res.γdown .+ ϵ .- c)).^2)
-        #         ts2[i] = sum((Di.γup .- mean(Di.yhat) / 2 - (res.γdown .- c)).^2)
-        #         # ts2[i] = sum((Di.γhat - res.γdown .- mean(Di.yhat) / 2 - (res.γdown .- c)).^2)
-        #         # ts2[i] = sum((workspace.B * Di.γup .- ϵi .- mean(Di.yhat) / 2 - (workspace.B * res.γdown .+ ϵ .- c)).^2)
-        #         # ts2[i] = sum((Di.γup - res.γdown).^2)
-        #         # ts2[i] = sum((Di.γup .- mean(Di.γup) - (res.γdown .- mean(res.γdown))).^2)
-        #     else
-        #         # ts2[i] = sum((Di.γup .- ϵi .- mean(Di.yhat) / 2 - (res.γup .- ϵ .- c)).^2)
-        #         ts2[i] = sum((Di.γup .- mean(Di.yhat) / 2 - (res.γup .- c)).^2)
-        #         # ts2[i] = sum((Di.γhat - res.γdown .- mean(Di.yhat) / 2 - (res.γup .- c)).^2)
-        #         # ts2[i] = sum((workspace.B * Di.γup .- ϵi .- mean(Di.yhat) / 2 - (workspace.B * res.γup .- ϵ .- c)).^2)
-        #         # ts2[i] = sum((Di.γup - res.γup).^2)
-        #         # ts2[i] = sum((Di.γup .- mean(Di.yup) - (res.γup .- mean(res.γup))).^2)
-        #     end
-        # end
-        if debug
-            γsdown[:, i+1] = Di.γdown
+Perform monotonicity test after monotone decomposition with smoothing splines.
+"""
+function mono_test_bootstrap_ss(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, 
+                                                                one_se_rule = false,
+                                                                nfold = 5,
+                                                                seed = rand(UInt64),
+                                                                md_method = "double_grid",
+                                                                nblock = -1, # wild bootstrap
+                                                                kw...) where T <: Real
+    D, μ0, μs0, errs, σerrs, yhat, yhatnew = cv_mono_decomp_ss(x, y; one_se_rule = one_se_rule, nfold = nfold, seed = seed, method = md_method, kw...)
+    error = y - D.yhat
+    c = mean(D.yhat) / 2
+    error = y - D.yhat
+    σ = std(error)
+    tobs = var(D.γdown)
+    ts = zeros(nrep)
+    for i = 1:nrep
+        yi = construct_bootstrap_y(y, error, D.workspace.B, D.γup, c, nblock = nblock)
+        try
+            Di = mono_decomp_ss(D.workspace, x, yi, D.λ, D.μ, strict = true)
+            ts[i] = var(Di.γdown)
+        catch
+            @warn "due to error in optimization, assign test statistic as Inf"
+            ts[i] = Inf
         end
     end
-    if debug
-        return γsdown
-    end
-    # pval = sum( (ts .> tobs) .| (ts_up .< tobs_up) ) / nrep
-    # pval = 1 - sum( (ts .< tobs) .* (ts_up .> tobs) ) / nrep
-    # pval = 1 - sum( (ts .< tobs) .* (ts_up .> ts) ) / nrep
-    # if tobs < tobs_up
-    #     pval = 1 - sum( (ts .< tobs) ) / nrep
-    # else
-    #     pval = 1 - sum( (ts_up .< tobs_up) ) / nrep
-    # end
-    # return ts2, tobs, tobs_up
-    # pval = 1 - sum( (min.(ts, ts_up) .< min(tobs, tobs_up) ) ) / nrep
-    # pval = sum(ts2 .> min(tobs, tobs_up)) / nrep
-    # pval1 = sum(ts_up .> tobs_up) / nrep
-    # return ts, ts2, ts3, ts4, ts5, tobs3, tobs4, tobs5
     pval = sum(ts .> tobs) / nrep
-    pval2 = sum(ts2 .> tobs) / nrep
-    pval3 = sum(ts3 .> tobs3) / nrep
-    pval4 = sum(ts4 .> tobs4) / nrep
-    pval5 = sum(ts5 .> tobs5) / nrep
-    # return pval, pval1, pval2
-    return [pval < 0.05, pval2 < 0.05, pval3 < 0.05, pval4 < 0.05, pval5 < 0.05]
+    @debug "pval = $pval"
+    return pval < 0.05
 end
 
 function mono_test(x::AbstractVector{T}, y::AbstractVector{T}) where T <: Real
