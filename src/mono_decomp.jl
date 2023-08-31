@@ -366,7 +366,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             method = "single_lambda", # fix_ratio, iter_search, grid_search
                                                             nk = 20, #used in fix_ratio
                                                             nλ = 10, rλ = 0.5, # used in grid_search
-                                                            nμ = 20, # used in double grid
+                                                            ngrid_μ = 20, # used in double grid
                                                             rλs = nothing,
                                                             rel_tol = 1e-1, maxiter = 10, # iter_search
                                                             k_magnitude = 2,
@@ -444,7 +444,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         else
             λs = rλs .* λ
         end
-        μs = exp.(range(log(μrange[1]), log(μrange[2]), length = nμ))
+        μs = exp.(range(log(μrange[1]), log(μrange[2]), length = ngrid_μ))
         D, errs, σerrs = cvfit(x, y, μs, λs, nfold = nfold, figname = figname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV)
     else # grid_search
         if isnothing(rλs)
@@ -457,6 +457,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         tol_boundary = tol_boundary, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV,
         log_scale = search_μ_in_log_scale, rerun_check = rerun_check)
     end
+    μmin = D.μ
     if one_se_rule
         if isa(errs, Matrix)
             ind = cv_one_se_rule(errs, σerrs, small_is_simple = [false, false])
@@ -465,11 +466,11 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
             ind = cv_one_se_rule(errs, σerrs, small_is_simple = false)
             μopt = μs[ind]
         end
-        @debug "use 1se rule: before 1se: μ = $(D.μ); after 1se: μ = $μopt"
+        @debug "use 1se rule: before 1se: μ = $μmin; after 1se: μ = $μopt"
         # workspace has been defined, so J would be inherited regardless of prop_nknots
         D = mono_decomp_ss(D.workspace, x, y, D.λ, μopt) 
     end
-    return D, μs[argmin(errs)], μs, errs, σerrs, yhat, yhatnew
+    return D, μmin, μs, errs, σerrs, yhat, yhatnew
 end
 
 function summary_res(σs = 0.2:0.2:1.0)
