@@ -29,8 +29,6 @@ end
     res = single_test_compare_mono(ns = [50], σs = [0.1], nrep = 1)
     @test size(res) == (1, 1, 5, 9)
 
-    res = single_test_compare_desc(ns=[50], σs=[0.1], nrep=1)
-    @test size(res) == (1, 1, 5, 15)
 end
 
 @testset "demo plot data" begin

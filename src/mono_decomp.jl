@@ -381,6 +381,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             one_se_rule = false, kw...) where T <: AbstractFloat
     # yhat, yhatnew, Ω, λ, spl, B = smooth_spline(x, y, x0, design_matrix = true, keep_stuff = true, LOOCV = true)
     yhat, Ω, λ, spl, B, γss = cv_smooth_spline(x, y, λs_in_ss, nfold = nfold, seed = seed)
+    @debug "λopt in ss = $λ"
     yhatnew = rcopy(R"predict($spl, $x0)$y")
     γup, γdown = mono_decomp(γss)
     s0 = norm(B * (γup .- γdown))
@@ -444,6 +445,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         else
             λs = rλs .* λ
         end
+        @debug "grid search λ in $λs"
         μs = exp.(range(log(μrange[1]), log(μrange[2]), length = ngrid_μ))
         D, errs, σerrs = cvfit(x, y, μs, λs, nfold = nfold, figname = figname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV)
     else # grid_search
@@ -458,17 +460,21 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         log_scale = search_μ_in_log_scale, rerun_check = rerun_check)
     end
     μmin = D.μ
+    λmin = D.λ
     if one_se_rule
         if isa(errs, Matrix)
             ind = cv_one_se_rule(errs, σerrs, small_is_simple = [false, false])
             μopt = μs[ind[1]]
+            λopt = λs[ind[2]]
         else
             ind = cv_one_se_rule(errs, σerrs, small_is_simple = false)
             μopt = μs[ind]
+            λopt = λmin
         end
         @debug "use 1se rule: before 1se: μ = $μmin; after 1se: μ = $μopt"
+        @debug "use 1se rule: before 1se: λ = $λmin; after 1se: λ = $λopt"
         # workspace has been defined, so J would be inherited regardless of prop_nknots
-        D = mono_decomp_ss(D.workspace, x, y, D.λ, μopt) 
+        D = mono_decomp_ss(D.workspace, x, y, λopt, μopt) 
     end
     return D, μmin, μs, errs, σerrs, yhat, yhatnew
 end
@@ -1587,7 +1593,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}
     if !isnothing(figname)
         silname = figname[1:end-4] * ".sil"
         serialize(silname, [μerr, σerr, μ, λ, nfold])
-        savefig(cvplot(μerr, σerr, μ, λ, nfold = nfold), figname)
+        savefig(cvplot(log.(μerr), σerr, μ, λ, nfold = nfold), figname)
     end
     ind = argmin(μerr)
     workspace = WorkSpaceSS()

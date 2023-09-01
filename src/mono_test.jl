@@ -501,7 +501,6 @@ function mono_test_bootstrap_ss(x::AbstractVector{T}, y::AbstractVector{T}; nrep
     error = y - D.yhat
     c = mean(D.yhat) / 2
     error = y - D.yhat
-    σ = std(error)
     tobs = var(D.γdown)
     ts = zeros(nrep)
     for i = 1:nrep

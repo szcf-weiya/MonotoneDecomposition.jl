@@ -42,6 +42,5 @@ export gen_data,
 
        single_test_compare_bowman,
        single_test_compare_ghosal,
-       single_test_compare_mono,
-       single_test_compare_desc
+       single_test_compare_mono
 end 
