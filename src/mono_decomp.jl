@@ -125,7 +125,7 @@ function smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abstrac
     return rcopy(R"predict($spl, $x)$y"), rcopy(R"predict($spl, $xnew)$y"), Σ, λ, spl, B, coef
 end
 
-function cv_smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, λs::AbstractVector{T}; nfold = 5, seed = rand(UInt64)) where T <: Real
+function cv_smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, λs::AbstractVector{T}; nfold = 5, seed = rand(UInt64), one_se_rule = false) where T <: Real
     n = length(x)
     folds = div_into_folds(n, K = nfold, seed = seed)
     nλ = length(λs)
@@ -140,7 +140,12 @@ function cv_smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, λs::Abstr
         end
     end
     μerr = dropdims(mean(errs, dims = 1), dims = 1)
-    ind = argmin(μerr)
+    σerr = dropdims(std(errs, dims = 1), dims = 1) / sqrt(nfold)
+    if one_se_rule
+        ind = cv_one_se_rule(μerr, σerr, small_is_simple = false)
+    else
+        ind = argmin(μerr)
+    end
     if ind == nλ
         @warn "the optimal is on the right boundary of λs"
     elseif ind == 1
@@ -380,7 +385,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             rerun_check = false,
                                                             one_se_rule = false, kw...) where T <: AbstractFloat
     # yhat, yhatnew, Ω, λ, spl, B = smooth_spline(x, y, x0, design_matrix = true, keep_stuff = true, LOOCV = true)
-    yhat, Ω, λ, spl, B, γss = cv_smooth_spline(x, y, λs_in_ss, nfold = nfold, seed = seed)
+    yhat, Ω, λ, spl, B, γss = cv_smooth_spline(x, y, λs_in_ss, nfold = nfold, seed = seed, one_se_rule = one_se_rule)
     @debug "λopt in ss = $λ"
     yhatnew = rcopy(R"predict($spl, $x0)$y")
     γup, γdown = mono_decomp(γss)
