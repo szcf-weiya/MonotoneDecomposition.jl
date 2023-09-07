@@ -228,6 +228,7 @@ function cv_cubic_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abstr
         ind = argmin(μerr)
     end
     Jopt = Js[ind]
+    @debug "one_se_rule = $one_se_rule: Jopt = $Jopt"
     if !isnothing(figname)
         savefig(cvplot(μerr, σerr, 1.0 .* Js, nfold = nfold, ind0 = ind, lbl = "J"), figname)
     end
@@ -328,9 +329,10 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}; ss = 10.0
                                                             fixJ = true,
                                                             x0 = x,
                                                             Js = 4:50,
-                                                            one_se_rule = false) where T <: AbstractFloat
+                                                            one_se_rule = false,
+                                                            one_se_rule_pre = false) where T <: AbstractFloat
     if fixJ
-        J, yhat, yhatnew = cv_cubic_spline(x, y, x0, one_se_rule = one_se_rule, nfold = nfold, 
+        J, yhat, yhatnew = cv_cubic_spline(x, y, x0, one_se_rule = one_se_rule_pre, nfold = nfold, Js = Js,
                                             figname = isnothing(figname) ? figname : figname[1:end-4] * "_bspl.png")
         return cv_mono_decomp_cs(x, y, x0, Js = J:J, ss = ss, figname = figname, nfold = nfold, one_se_rule = one_se_rule)..., yhat, yhatnew
     else
@@ -383,9 +385,11 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             λs_in_ss = 10.0 .^ (-16:0.25:2),
                                                             search_μ_in_log_scale = false,
                                                             rerun_check = false,
-                                                            one_se_rule = false, kw...) where T <: AbstractFloat
+                                                            one_se_rule = false, 
+                                                            one_se_rule_pre = false, 
+                                                            kw...) where T <: AbstractFloat
     # yhat, yhatnew, Ω, λ, spl, B = smooth_spline(x, y, x0, design_matrix = true, keep_stuff = true, LOOCV = true)
-    yhat, Ω, λ, spl, B, γss = cv_smooth_spline(x, y, λs_in_ss, nfold = nfold, seed = seed, one_se_rule = one_se_rule)
+    yhat, Ω, λ, spl, B, γss = cv_smooth_spline(x, y, λs_in_ss, nfold = nfold, seed = seed, one_se_rule = one_se_rule_pre)
     @debug "λopt in ss = $λ"
     yhatnew = rcopy(R"predict($spl, $x0)$y")
     γup, γdown = mono_decomp(γss)
@@ -1242,14 +1246,8 @@ function cv_one_se_rule(μs::AbstractVector{T}, σs::AbstractVector{T}; small_is
     end
     for i = ii
         if μs[i] < err_plus_se
+            iopt = i
             continue
-        else
-            if small_is_simple
-                iopt = i + 1
-            else
-                iopt = i - 1
-            end
-            break
         end
     end
     return iopt

@@ -21,13 +21,13 @@ end
 
 @testset "experiments" begin
     res = single_test_compare_bowman(ns = [50], σs = [0.1], nrep = 1)
-    @test size(res) == (4, 1, 1, 9)
+    @test size(res) == (4, 1, 1, 5)
 
     res2 = single_test_compare_ghosal(ns = [50], σs = [0.1], nrep = 1)
-    @test size(res2) == (1, 1, 4, 9)
+    @test size(res2) == (1, 1, 4, 5)
 
     res = single_test_compare_mono(ns = [50], σs = [0.1], nrep = 1)
-    @test size(res) == (1, 1, 5, 9)
+    @test size(res) == (1, 1, 5, 5)
 
 end
 

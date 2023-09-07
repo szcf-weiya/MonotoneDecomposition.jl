@@ -263,8 +263,10 @@ end
 function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, 
                                             μs = 10.0 .^ (-6:0.1:2), Js = 4:20, fixJ = false,
                                             nblock = -1, # wild bootstrap
-                                            one_se_rule = false, kw...) where T <: Real
-    D, μ, μs = cv_mono_decomp_cs(x, y, ss = μs, one_se_rule = one_se_rule, fixJ = fixJ, Js = Js)
+                                            one_se_rule = false, 
+                                            one_se_rule_pre = false, 
+                                            kw...) where T <: Real
+    D, μ, μs = cv_mono_decomp_cs(x, y, ss = μs, one_se_rule = one_se_rule, fixJ = fixJ, Js = Js, one_se_rule_pre = one_se_rule_pre)
     J = D.workspace.J
     # scatter(x, y)
     # plot!(x, res.yhat)
@@ -476,12 +478,15 @@ Perform monotonicity test after monotone decomposition with smoothing splines.
 """
 function mono_test_bootstrap_ss(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, 
                                                                 one_se_rule = false,
+                                                                one_se_rule_pre = false,
                                                                 nfold = 5,
                                                                 seed = rand(UInt64),
                                                                 md_method = "double_grid",
                                                                 nblock = -1, # wild bootstrap
                                                                 kw...) where T <: Real
-    D, μ0, μs0, errs, σerrs, yhat, yhatnew = cv_mono_decomp_ss(x, y; one_se_rule = one_se_rule, nfold = nfold, seed = seed, method = md_method, kw...)
+    D, μ0, μs0, errs, σerrs, yhat, yhatnew = cv_mono_decomp_ss(x, y; one_se_rule = one_se_rule, 
+            one_se_rule_pre = one_se_rule_pre,
+            nfold = nfold, seed = seed, method = md_method, kw...)
     error = y - D.yhat
     c = mean(D.yhat) / 2
     error = y - D.yhat
