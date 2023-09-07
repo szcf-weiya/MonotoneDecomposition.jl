@@ -4,10 +4,10 @@ using MonotoneDecomposition
 
 @testset "simple examples" begin
     x = randn(100)
-    @test !MonotoneDecomposition.mono_test_bootstrap_cs(x, x)
-    @test !MonotoneDecomposition.mono_test_bootstrap_ss(x, x)
-    @test MonotoneDecomposition.mono_test_bootstrap_cs(x, x.^2)
-    @test MonotoneDecomposition.mono_test_bootstrap_ss(x, x.^2)
+    @test MonotoneDecomposition.mono_test_bootstrap_cs(x, x) > 0.05
+    @test MonotoneDecomposition.mono_test_bootstrap_ss(x, x) > 0.05
+    @test MonotoneDecomposition.mono_test_bootstrap_cs(x, x.^2) < 0.05
+    @test MonotoneDecomposition.mono_test_bootstrap_ss(x, x.^2) < 0.05
 end
 
 @testset "ghosal constant" begin

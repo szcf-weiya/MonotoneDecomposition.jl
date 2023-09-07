@@ -138,7 +138,7 @@ function ghosal_σn(t, X, kn)
     return sqrt(σ2 * 4 / 3n / (n-1) / (n-2))
 end
 
-function ghosal_S1n(X, Y, c, a = 0.05, b = 0.95, α = 0.05)
+function ghosal_S1n(X, Y, c; a = 0.05, b = 0.95, α = 0.05)
     k = x -> 0.75(1-x^2) * (-1 < x < 1)
     n = length(X)
     hn = 0.5 * n^(-1/5)
@@ -151,14 +151,30 @@ function ghosal_S1n(X, Y, c, a = 0.05, b = 0.95, α = 0.05)
     return S1n > c
 end
 
-ghosal(x::AbstractVector{T}, y::AbstractVector{T}) where T <: Real = ghosal_S1n(x, y, C_GHOSAL[length(x)])
+function ghosal_S1n(X, Y; a = 0.05, b = 0.95, α = 0.05)
+    k = x -> 0.75(1-x^2) * (-1 < x < 1)
+    n = length(X)
+    hn = 0.5 * n^(-1/5)
+    nt = round(Int, 1 / hn * 2)
+    kn(x) = k(x / hn) / hn
+    S(t) = sqrt(n) * ghosal_Un(t, X, Y, kn) / ghosal_σn(t, X, kn)
+    # Question: how to calculate the supremum
+    ts = range(a, b, length = nt)
+    S1n = maximum(S.(ts))
+    an = sqrt(2log((b-a)/hn))
+    bn = an + log(sqrt(LAMBDA) / 2π) / an
+    return 1-exp(-exp(-an * (S1n - bn)))
+end
+
+
+ghosal(x::AbstractVector{T}, y::AbstractVector{T}) where T <: Real = ghosal_S1n(x, y)
 
 function meyer(x::AbstractVector{T}, y::AbstractVector{T}, nsim = 100, k = 6) where T <: Real
     meyer_rfile = joinpath(@__DIR__, "testmonotonicity.R")
     R"source($meyer_rfile)" # not found if put outside the function when wrapped into a package
     n = length(x)
     w = ones(n)
-    return rcopy(R"montest($x, $y, 0, $w, $k, $nsim, 1)$pval") < 0.05
+    return rcopy(R"montest($x, $y, 0, $w, $k, $nsim, 1)$pval")
 end
 
 function bowman(x::AbstractVector{T}, y::AbstractVector{T}) where T <: Real
@@ -171,108 +187,77 @@ function bowman(x::AbstractVector{T}, y::AbstractVector{T}) where T <: Real
     catch
         pval = 1
     end
-    return pval < 0.05
+    return pval
 end
 
 # run single experiment to make comparisons on bowan's curves
 function single_test_compare_bowman(;
         as = [0, 0.15, 0.25, 0.45],
         ns = [50, 100, 200],
-        # ns = [200]
-        # ns = [100]
-        # σs = [0.001, 0.01, 0.025, 0.05, 0.1] 
         σs = [0.001, 0.01, 0.1],
-        only_proposed = false,
         nrep = 500, kw...
-        # σs = [0.001, 0.1]     
     )
     # proposed, ghosal, meyer
-    props = zeros(length(as), length(ns), length(σs), 9)
+    pvals = zeros(length(as), length(ns), length(σs), 5)
     for (j, a) in enumerate(as)
         for (k, n) in enumerate(ns)
             for (l, σ) in enumerate(σs)
                 x, y = gen_data_bowman(a = a, n = n, σ = σ)
-                if !only_proposed
-                    props[j, k, l, 1] = meyer(x, y)
-                    props[j, k, l, 2] = ghosal(x, y)
-                    props[j, k, l, 3] = bowman(x, y)
-                end
-                props[j, k, l, 4:6] .= mono_test_bootstrap_cs(x, y; nrep = nrep, kw...)
-                props[j, k, l, 7:9] .= mono_test_bootstrap_ss(x, y; nrep = nrep, kw...)
+                pvals[j, k, l, 1] = meyer(x, y)
+                pvals[j, k, l, 2] = ghosal(x, y)
+                pvals[j, k, l, 3] = bowman(x, y)
+                pvals[j, k, l, 4] = mono_test_bootstrap_cs(x, y; nrep = nrep, kw...)
+                pvals[j, k, l, 5] = mono_test_bootstrap_ss(x, y; nrep = nrep, kw...)
             end
         end
     end
-    return props
+    return pvals
 end
 
 # run single experiment to make comparisons on ghosal's curves
 function single_test_compare_ghosal(;
         ns = [50, 100, 200],
-        # ns = [200]
         σs = [0.001, 0.01, 0.1],
-        # σs = [0.001]
-        only_proposed = false,
         nrep = 500, kw...
     )
     # proposed, ghosal, meyer, sm
-    props = zeros(length(ns), length(σs), 4, 9)
+    pvals = zeros(length(ns), length(σs), 4, 5)
     for (i, n) in enumerate(ns)
         for (k, σ) in enumerate(σs)
             x, m1, m2, m3, m4 = gen_data_ghosal(n = n, σ = σ)
             for (j, y) in enumerate([m1, m2, m3, m4])
-            # for (j, y) in enumerate([m1, m2])
-                # props[i, j, 1] = mono_test(x, y)
-                # props[i, k, j, 1:5] .= mono_test_bootstrap(x, y, data_obey_H0 = false, one_se_rule=true)
-                # props[i, k, j, 6:10] .= mono_test_bootstrap_ss(x, y, data_obey_H0 = false, one_se_rule=true)
-                # props[i, k, j, 11:15] .= mono_test_bootstrap(x, y, data_obey_H0 = true, one_se_rule=true)
-                # props[i, k, j, 16:20] .= mono_test_bootstrap_ss(x, y, data_obey_H0 = true, one_se_rule=true)
-                # pvals[j, k, l, 1] = mono_test_bootstrap(x, y) # might be too slow
-                # props[i, k, j, 21] = meyer(x, y)
-                # props[i, k, j, 22] = ghosal_S1n(x, y, C_GHOSAL[n])
-                # props[i, k, j, 23] = bowman(x, y)
-                # props[i, k, j, 24] = mono_test_bootstrap_sup(x, y)
-                # props[i, k, j, 25] = mono_test_bootstrap_supss(x, y)
-                if !only_proposed
-                    props[i, k, j, 1] = meyer(x, y)
-                    props[i, k, j, 2] = ghosal(x, y)
-                    props[i, k, j, 3] = bowman(x, y)
-                end
-                props[i, k, j, 4:6] .= mono_test_bootstrap_cs(x, y; nrep = nrep, kw...)
-                props[i, k, j, 7:9] .= mono_test_bootstrap_ss(x, y; nrep = nrep, kw...)
+                pvals[i, k, j, 1] = meyer(x, y)
+                pvals[i, k, j, 2] = ghosal(x, y)
+                pvals[i, k, j, 3] = bowman(x, y)
+                pvals[i, k, j, 4] = mono_test_bootstrap_cs(x, y; nrep = nrep, kw...)
+                pvals[i, k, j, 5] = mono_test_bootstrap_ss(x, y; nrep = nrep, kw...)
             end
         end
     end
-    return props
+    return pvals
 end
 
 function single_test_compare_mono(;
         ns = [50, 100, 200],
-        # ns = [200]
-        # σs = [0.025, 0.05, 0.1]
-        # σs = 10 .^ (-5:0.5:-1)
-        # σs = 10 .^ (-3:0.5:-1)
         σs = [0.001, 0.01, 0.1],
-        only_proposed = false,
         equidistant = false,
         nrep = 500, kw...
     )
     # proposed, ghosal, meyer, sm
-    props = zeros(length(ns), length(σs), 5, 9)
+    pvals = zeros(length(ns), length(σs), 5, 5)
     for (i, n) in enumerate(ns)
         for (k, σ) in enumerate(σs)
             x, m1, m2, m3, m4, m5 = gen_mono_data(n = n, σ = σ, equidistant = equidistant)
             for (j, y) in enumerate([m1, m2, m3, m4, m5])
-                if !only_proposed
-                    props[i, k, j, 1] = meyer(x, y)
-                    props[i, k, j, 2] = ghosal(x, y)
-                    props[i, k, j, 3] = bowman(x, y)
-                end
-                props[i, k, j, 4:6] .= mono_test_bootstrap_cs(x, y; nrep = nrep, kw...)
-                props[i, k, j, 7:9] .= mono_test_bootstrap_ss(x, y; nrep = nrep, kw...)
+                pvals[i, k, j, 1] = meyer(x, y)
+                pvals[i, k, j, 2] = ghosal(x, y)
+                pvals[i, k, j, 3] = bowman(x, y)
+                pvals[i, k, j, 4] = mono_test_bootstrap_cs(x, y; nrep = nrep, kw...)
+                pvals[i, k, j, 5] = mono_test_bootstrap_ss(x, y; nrep = nrep, kw...)
             end
         end
     end
-    return props
+    return pvals
 end
 
 function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, 
@@ -299,8 +284,7 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
         end
     end
     pval = sum(ts .> tobs) / nrep
-    @debug "pval = $pval"
-    return pval < 0.05
+    return pval
 end
 
 function mono_test_bootstrap_sup(x::AbstractVector{T}, y::AbstractVector{T}; 
@@ -514,8 +498,7 @@ function mono_test_bootstrap_ss(x::AbstractVector{T}, y::AbstractVector{T}; nrep
         end
     end
     pval = sum(ts .> tobs) / nrep
-    @debug "pval = $pval"
-    return pval < 0.05
+    return pval
 end
 
 function mono_test(x::AbstractVector{T}, y::AbstractVector{T}) where T <: Real
