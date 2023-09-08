@@ -261,7 +261,7 @@ function single_test_compare_mono(;
 end
 
 function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, 
-                                            μs = 10.0 .^ (-6:0.1:2), Js = 4:20, fixJ = false,
+                                            μs = 10.0 .^ (-6:0.1:2), Js = 4:50, fixJ = false,
                                             nblock = -1, # wild bootstrap
                                             one_se_rule = false, 
                                             one_se_rule_pre = false, 
@@ -523,10 +523,14 @@ end
 # summary experiment results
 function summary_mono_test(resfile::String, task = "typeI_error")
     texname = resfile[1:end-4] * ".tex"
-    res = deserialize(resfile)
+    res0 = deserialize(resfile)
+    res = [x .< 0.05 for x in res0]
     methods = ["Meyer", "Ghosal", "Bowman",
-               "MD (CS) sup", "MD (CS) min", "MD (CS) 1se", 
-               "MD (SS) sup", "MD (SS) min", "MD (SS) 1se"]
+            #    "MD (CS) sup", "MD (CS) min", "MD (CS) 1se", 
+                "MDCS",
+                "MDSS"
+            #    "MD (SS) sup", "MD (SS) min", "MD (SS) 1se"
+               ]
     nmethod = length(methods)
     μ = mean(res)
     @assert size(μ, 4) == nmethod
@@ -551,4 +555,15 @@ function summary_mono_test(resfile::String, task = "typeI_error")
                     subrownames = name_curves, 
                     colnames_of_rownames = ["Methods", "Curves"], 
                     file = texname, format="raw")
+    if task == "typeI_error"
+        mkpath(resfile[1:end-4])
+        for i = 1:3
+            for j = 1:3
+                for k = 1:5
+                    plot([histogram([x[i, j, k, ℓ] for x in res0], xlims = (0, 1.1), bins = 0:0.05:1.1, normalize = :probability, legend = false, title = methods[ℓ], margin=5Plots.mm) for ℓ = 1:5]..., layout = (1, 5), size = (2000, 400))
+                    savefig(joinpath(resfile[1:end-4], "pval_$i$j$k.pdf"))
+                end
+            end
+        end
+    end
 end

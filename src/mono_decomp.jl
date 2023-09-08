@@ -125,7 +125,7 @@ function smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abstrac
     return rcopy(R"predict($spl, $x)$y"), rcopy(R"predict($spl, $xnew)$y"), Σ, λ, spl, B, coef
 end
 
-function cv_smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, λs::AbstractVector{T}; nfold = 5, seed = rand(UInt64), one_se_rule = false) where T <: Real
+function cv_smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, λs::AbstractVector{T}; nfold = 5, seed = rand(UInt64), one_se_rule = false, figname  = nothing) where T <: Real
     n = length(x)
     folds = div_into_folds(n, K = nfold, seed = seed)
     nλ = length(λs)
@@ -136,7 +136,8 @@ function cv_smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, λs::Abstr
         for (i, λ) in enumerate(λs)
             spl = R"smooth.spline($(x[train_idx]), $(y[train_idx]), lambda = $λ)"
             yhat = rcopy(R"predict($spl, $(x[test_idx]))$y")
-            errs[k, i] = norm(yhat - y[test_idx])^2 / length(test_idx)
+            # for LOOCV, yhat is a scalar, while y[test_idx] is a vector, use `.-` can help
+            errs[k, i] = norm(yhat .- y[test_idx])^2 / length(test_idx) 
         end
     end
     μerr = dropdims(mean(errs, dims = 1), dims = 1)
@@ -152,6 +153,9 @@ function cv_smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, λs::Abstr
         @warn "the optimal is on the left boundary of λs"
     end
     λopt = λs[ind]
+    if !isnothing(figname)
+        savefig(cvplot(μerr, σerr, λs, nfold = nfold, ind0 = ind, lbl = "λ"), figname)
+    end
     spl = R"smooth.spline($x, $y, lambda = $λopt, keep.stuff = TRUE)"
     Σ = recover(rcopy(R"$spl$auxM$Sigma"))
     knots = rcopy(R"$spl$fit$knot")[4:end-3]
@@ -217,7 +221,7 @@ function cv_cubic_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abstr
         train_idx = setdiff(1:n, test_idx)
         for (j, J) in enumerate(Js)
             _, yhat = cubic_spline(J)(x[train_idx], y[train_idx], x[test_idx])
-            errs[k, j] = norm(yhat - y[test_idx])^2 / length(test_idx)
+            errs[k, j] = norm(yhat .- y[test_idx])^2 / length(test_idx)
         end
     end
     μerr = dropdims(mean(errs, dims = 1), dims = 1)
@@ -326,13 +330,14 @@ Cross-validation for monotone decomposition with cubic B-splines when the fixed 
 function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}; ss = 10.0 .^ (-6:0.1:-1), 
                                                             figname = nothing, 
                                                             nfold = 10, 
+                                                            nfold_pre = length(x),
                                                             fixJ = true,
                                                             x0 = x,
                                                             Js = 4:50,
                                                             one_se_rule = false,
                                                             one_se_rule_pre = false) where T <: AbstractFloat
     if fixJ
-        J, yhat, yhatnew = cv_cubic_spline(x, y, x0, one_se_rule = one_se_rule_pre, nfold = nfold, Js = Js,
+        J, yhat, yhatnew = cv_cubic_spline(x, y, x0, one_se_rule = one_se_rule_pre, nfold = nfold_pre, Js = Js,
                                             figname = isnothing(figname) ? figname : figname[1:end-4] * "_bspl.png")
         return cv_mono_decomp_cs(x, y, x0, Js = J:J, ss = ss, figname = figname, nfold = nfold, one_se_rule = one_se_rule)..., yhat, yhatnew
     else
@@ -366,7 +371,7 @@ scatter!(x, ydown)
 """
 function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname = nothing, 
                                                             verbose = true,
-                                                            nfold = 10, 
+                                                            nfold = 10, nfold_pre = length(x),
                                                             tol = 1e-7,
                                                             tol_boundary = 1e-1,
                                                             x0 = x, # test point of x
@@ -387,9 +392,15 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             rerun_check = false,
                                                             one_se_rule = false, 
                                                             one_se_rule_pre = false, 
+                                                            use_r_ss = false,
                                                             kw...) where T <: AbstractFloat
-    # yhat, yhatnew, Ω, λ, spl, B = smooth_spline(x, y, x0, design_matrix = true, keep_stuff = true, LOOCV = true)
-    yhat, Ω, λ, spl, B, γss = cv_smooth_spline(x, y, λs_in_ss, nfold = nfold, seed = seed, one_se_rule = one_se_rule_pre)
+    if use_r_ss
+        yhat, yhatnew, Ω, λ, spl, B, γss = smooth_spline(x, y, x0, design_matrix = true, keep_stuff = true, LOOCV = true)
+    else
+        yhat, Ω, λ, spl, B, γss = cv_smooth_spline(x, y, λs_in_ss, nfold = nfold_pre, seed = seed, 
+                                                one_se_rule = one_se_rule_pre, 
+                                                figname = isnothing(figname) ? figname : figname[1:end-4] * "_ss.png")
+    end
     @debug "λopt in ss = $λ"
     yhatnew = rcopy(R"predict($spl, $x0)$y")
     γup, γdown = mono_decomp(γss)
