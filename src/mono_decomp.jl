@@ -18,6 +18,7 @@ import MonotoneSplines.pick_knots
 # using SharedArrays
 
 OPTIMIZER = ECOS.Optimizer
+OK_STATUS = [MOI.OPTIMAL, MOI.ALMOST_OPTIMAL, MOI.LOCALLY_SOLVED]
 
 # https://www.gurobi.com/documentation/current/refman/threads.html#parameter:Threads
 function gurobi(nthread::Int = 0)
@@ -29,6 +30,8 @@ function gurobi(nthread::Int = 0)
     GRBsetintparam(GRB_ENV, GRB_INT_PAR_THREADS, nthread)
     # GRBsetdblparam(GRB_ENV, GRB_DBL_PAR_OPTIMALITYTOL, 1e-9)
     # GRBsetdblparam(GRB_ENV, GRB_DBL_PAR_FEASIBILITYTOL, 1e-9)
+    # GRBsetdblparam(GRB_ENV, GRB_DBL_PAR_BARCONVTOL, 1e-9)
+    # GRBsetdblparam(GRB_ENV, GRB_DBL_PAR_BARQCPCONVTOL, 1e-9)
     global OPTIMIZER = () -> Gurobi.Optimizer(GRB_ENV)
 end
 
@@ -315,6 +318,7 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abs
     end
     Jopt = Js[ind[1]]
     sopt = ss[ind[2]]
+    @debug "Jopt = $Jopt, μopt = $sopt"
     if !isnothing(figname)
         silname = figname[1:end-4] * "_Jmu.sil"
         serialize(silname, [μerr, σerr, Jopt, sopt, Js, ss, nfold])
@@ -339,8 +343,13 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}; ss = 10.0
                                                             one_se_rule = false,
                                                             one_se_rule_pre = false) where T <: AbstractFloat
     if fixJ
-        J, yhat, yhatnew = cv_cubic_spline(x, y, x0, one_se_rule = one_se_rule_pre, nfold = nfold_pre, Js = Js,
-                                            figname = isnothing(figname) ? figname : figname[1:end-4] * "_bspl.png")
+        if length(Js) == 1
+            J = Js[1]
+            yhat, yhatnew = cubic_spline(J)(x, y, x0)
+        else
+            J, yhat, yhatnew = cv_cubic_spline(x, y, x0, one_se_rule = one_se_rule_pre, nfold = nfold_pre, Js = Js,
+                                                figname = isnothing(figname) ? figname : figname[1:end-4] * "_bspl.png")
+        end
         return cv_mono_decomp_cs(x, y, x0, Js = J:J, ss = ss, figname = figname, nfold = nfold, one_se_rule = one_se_rule)..., yhat, yhatnew
     else
         return cv_mono_decomp_cs(x, y, x0, ss = ss, Js = Js, figname = figname, nfold = nfold, one_se_rule = one_se_rule)
@@ -412,7 +421,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
     # s_discrepancy = [max(eps(), min(s_residual, s_smoothness)) / 10^k_magnitude, 
     #                             max(s_residual, s_smoothness) * 10^k_magnitude]
     s_discrepancy = [eps(), max(s_residual, s_smoothness) * 10^k_magnitude]
-    μrange = s_discrepancy / s0^2
+        μrange = s_discrepancy / s0^2
     verbose && @info "μrange for compatible terms: $μrange"
     verbose && @info "s0 = $s0, s_residual = $s_residual, s_smoothness = $s_smoothness, s_discrepancy = $s_discrepancy"
     if μrange[2] < minmaxμ # cbrt of eps()
@@ -844,7 +853,7 @@ end
             strict && error(status)
             γhats[:, i] .= mean(y) / 2
         else
-            if !(status in [MOI.OPTIMAL, MOI.ALMOST_OPTIMAL, MOI.LOCALLY_SOLVED])
+            if !(status in OK_STATUS)
                 @debug "$status when λ=$λ, μ=$μ: direct take the solution"
                 strict && error(status)
             end
@@ -879,7 +888,7 @@ end
                 strict && error(status)
                 γhats[:, i] .= mean(y) / 2
             else
-                if !(status in [MOI.OPTIMAL, MOI.ALMOST_OPTIMAL, MOI.LOCALLY_SOLVED])
+                if !(status in OK_STATUS)
                     @debug "$status"
                     strict && error(status)
                 end
@@ -914,7 +923,7 @@ end
                 strict && error(status)
                 γhats[:, i] .= mean(y) / 2
             else
-                if !(status in [MOI.OPTIMAL, MOI.ALMOST_OPTIMAL, MOI.LOCALLY_SOLVED])
+                if !(status in OK_STATUS)
                     @debug "$status"
                     strict && error(status)
                 end
@@ -988,7 +997,7 @@ function _optim!(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T}, s::Union{No
             γhat .= mean(y) / 2
         end
     else
-        if !(status in [MOI.OPTIMAL, MOI.ALMOST_OPTIMAL, MOI.LOCALLY_SOLVED])
+        if !(status in OK_STATUS)
             @debug "$status"
             strict && error(status)
         end
@@ -1018,7 +1027,7 @@ struct MonoDecomp{T <: AbstractFloat}
     workspace::WorkSpace
 end
 
-function build_model!(workspace::WorkSpaceSS, x::AbstractVector{T}; ε = (eps())^(1/3), prop_nknots = 1.0) where T <: AbstractFloat
+function build_model!(workspace::WorkSpaceSS, x::AbstractVector{T}; ε = eps()^(1/3), prop_nknots = 1.0) where T <: AbstractFloat
     if !isdefined(workspace, 3) # the first two will be automatically initialized
         knots, mx, rx, idx, idx0 = pick_knots(x, all_knots = false, prop_nknots = prop_nknots)
         bbasis = R"fda::create.bspline.basis(breaks = $knots, norder = 4)"
@@ -1260,7 +1269,8 @@ function cv_one_se_rule(μs::AbstractVector{T}, σs::AbstractVector{T}; small_is
     for i = ii
         if μs[i] < err_plus_se
             iopt = i
-            continue
+        # else
+        #     break
         end
     end
     return iopt
@@ -1309,6 +1319,29 @@ function cv_one_se_rule(μs::AbstractMatrix{T}, σs::AbstractMatrix{T}; small_is
     else
         return iopt1, jopt
     end
+end
+
+function cv_one_se_rule2(μs::AbstractMatrix{T}, σs::AbstractMatrix{T}; small_is_simple = [true, true]) where T <: AbstractFloat
+    ind = argmin(μs)
+    iopt, jopt = ind[1], ind[2]
+    err_plus_se = μs[iopt, jopt] + σs[iopt, jopt]
+    ii = ifelse(small_is_simple[1], iopt:-1:1, iopt:size(μs, 1))
+    jj = ifelse(small_is_simple[2], jopt:-1:1, jopt:size(μs, 2))
+    @debug ii
+    @debug jj
+    best_err = 0.0
+    for i = ii
+        for j = jj
+            if μs[i, j] < err_plus_se
+                if μs[i, j] > best_err # pick the one with largest error (different from univariate case, no a single direction to a simpler model)
+                    best_err = μs[i, j]
+                    iopt = i
+                    jopt = j
+                end
+            end
+        end
+    end
+    return iopt, jopt
 end
 
 """
@@ -1614,10 +1647,11 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}
     end
     μerr = dropdims(mean(err, dims = 1), dims=1)
     σerr = dropdims(std(err, dims = 1), dims=1) / sqrt(nfold)
+    serialize("/tmp/debug_muerr.sil", err)
     if !isnothing(figname)
         silname = figname[1:end-4] * ".sil"
         serialize(silname, [μerr, σerr, μ, λ, nfold])
-        savefig(cvplot(log.(μerr), σerr, μ, λ, nfold = nfold), figname)
+        savefig(cvplot(μerr, σerr, μ, λ, nfold = nfold), figname)
     end
     ind = argmin(μerr)
     workspace = WorkSpaceSS()

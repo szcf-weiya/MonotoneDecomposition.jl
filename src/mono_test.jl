@@ -206,8 +206,8 @@ function single_test_compare_bowman(;
                 pvals[j, k, l, 1] = meyer(x, y)
                 pvals[j, k, l, 2] = ghosal(x, y)
                 pvals[j, k, l, 3] = bowman(x, y)
-                pvals[j, k, l, 4] = mono_test_bootstrap_cs(x, y; nrep = nrep, kw...)
-                pvals[j, k, l, 5] = mono_test_bootstrap_ss(x, y; nrep = nrep, kw...)
+                pvals[j, k, l, 4] = mono_test_bootstrap_cs(x, y; nrep = nrep, kw...)[1]
+                pvals[j, k, l, 5] = mono_test_bootstrap_ss(x, y; nrep = nrep, kw...)[1]
             end
         end
     end
@@ -229,8 +229,8 @@ function single_test_compare_ghosal(;
                 pvals[i, k, j, 1] = meyer(x, y)
                 pvals[i, k, j, 2] = ghosal(x, y)
                 pvals[i, k, j, 3] = bowman(x, y)
-                pvals[i, k, j, 4] = mono_test_bootstrap_cs(x, y; nrep = nrep, kw...)
-                pvals[i, k, j, 5] = mono_test_bootstrap_ss(x, y; nrep = nrep, kw...)
+                pvals[i, k, j, 4] = mono_test_bootstrap_cs(x, y; nrep = nrep, kw...)[1]
+                pvals[i, k, j, 5] = mono_test_bootstrap_ss(x, y; nrep = nrep, kw...)[1]
             end
         end
     end
@@ -252,8 +252,8 @@ function single_test_compare_mono(;
                 pvals[i, k, j, 1] = meyer(x, y)
                 pvals[i, k, j, 2] = ghosal(x, y)
                 pvals[i, k, j, 3] = bowman(x, y)
-                pvals[i, k, j, 4] = mono_test_bootstrap_cs(x, y; nrep = nrep, kw...)
-                pvals[i, k, j, 5] = mono_test_bootstrap_ss(x, y; nrep = nrep, kw...)
+                pvals[i, k, j, 4] = mono_test_bootstrap_cs(x, y; nrep = nrep, kw...)[1]
+                pvals[i, k, j, 5] = mono_test_bootstrap_ss(x, y; nrep = nrep, kw...)[1]
             end
         end
     end
@@ -265,13 +265,17 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
                                             nblock = -1, # wild bootstrap
                                             one_se_rule = false, 
                                             one_se_rule_pre = false, 
+                                            figname = nothing,
+                                            nfold = 10, nfold_pre = 10,
                                             kw...) where T <: Real
-    D, μ, μs = cv_mono_decomp_cs(x, y, ss = μs, one_se_rule = one_se_rule, fixJ = fixJ, Js = Js, one_se_rule_pre = one_se_rule_pre)
+    D, μ, μs = cv_mono_decomp_cs(x, y, ss = μs, one_se_rule = one_se_rule, fixJ = fixJ, Js = Js, one_se_rule_pre = one_se_rule_pre, figname = figname, nfold = nfold, nfold_pre = nfold_pre)
+    @debug D.γdown
     J = D.workspace.J
     # scatter(x, y)
     # plot!(x, res.yhat)
     c = mean(D.yhat) / 2
     error = y - D.yhat
+    @debug maximum(max.(error))
     # σ = std(err)
     tobs = var(D.γdown)
     ts = zeros(nrep)
@@ -279,14 +283,16 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
         yi = construct_bootstrap_y(y, error, D.workspace.B, D.γup, c, nblock = nblock)
         try
             Di = mono_decomp_cs(x, yi, s = μ, s_is_μ = true, J = J)
-            ts[i] = var(Di.γdown)
+                        ts[i] = var(Di.γdown)
         catch
             @warn "due to error in optimization, assign test statistic as Inf"
             ts[i] = Inf
         end
     end
+    @debug ts
+    @debug tobs
     pval = sum(ts .> tobs) / nrep
-    return pval
+    return pval, D
 end
 
 function mono_test_bootstrap_sup(x::AbstractVector{T}, y::AbstractVector{T}; 
@@ -503,7 +509,7 @@ function mono_test_bootstrap_ss(x::AbstractVector{T}, y::AbstractVector{T}; nrep
         end
     end
     pval = sum(ts .> tobs) / nrep
-    return pval
+    return pval, D
 end
 
 function mono_test(x::AbstractVector{T}, y::AbstractVector{T}) where T <: Real

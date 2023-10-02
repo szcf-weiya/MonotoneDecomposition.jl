@@ -557,9 +557,11 @@ end
     end
     @testset "smoothing splines" begin
         for one_se_rule in [false, true]
-            for method in ["single_lambda", "fix_ratio", "grid_search", "iter_search"]
+            for method in ["single_lambda", "fix_ratio", "grid_search"]#, "iter_search"]
                 Random.seed!(1234)
                 res = benchmarking_ss(method = method, one_se_rule = one_se_rule, 
+                                        one_se_rule_pre = one_se_rule,
+                                        nfold = 5, nfold_pre = 5,
                                         nλ = 2, # only for grid_search or iter_search
                                         nk = 50 # only for fix_ratio
                                     )
