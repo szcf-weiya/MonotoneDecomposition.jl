@@ -261,13 +261,13 @@ function single_test_compare_mono(;
 end
 
 function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, 
-                                            μs = 10.0 .^ (-6:0.1:2), Js = 4:50, fixJ = false,
+                                            μs = 10.0 .^ (-6:0.1:2), Js = 4:50, fixJ = true,
                                             nblock = -1, # wild bootstrap
                                             one_se_rule = false, 
                                             one_se_rule_pre = false, 
                                             figname = nothing,
                                             nfold = 10, nfold_pre = 10,
-                                            kw...) where T <: Real
+                                            kw...)::Tuple{T, MonoDecomp{T}} where T <: Real
     D, μ, μs = cv_mono_decomp_cs(x, y, ss = μs, one_se_rule = one_se_rule, fixJ = fixJ, Js = Js, one_se_rule_pre = one_se_rule_pre, figname = figname, nfold = nfold, nfold_pre = nfold_pre)
     @debug D.γdown
     J = D.workspace.J
@@ -283,7 +283,7 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
         yi = construct_bootstrap_y(y, error, D.workspace.B, D.γup, c, nblock = nblock)
         try
             Di = mono_decomp_cs(x, yi, s = μ, s_is_μ = true, J = J)
-                        ts[i] = var(Di.γdown)
+            ts[i] = var(Di.γdown)
         catch
             @warn "due to error in optimization, assign test statistic as Inf"
             ts[i] = Inf
@@ -489,7 +489,7 @@ function mono_test_bootstrap_ss(x::AbstractVector{T}, y::AbstractVector{T}; nrep
                                                                 seed = rand(UInt64),
                                                                 md_method = "double_grid",
                                                                 nblock = -1, # wild bootstrap
-                                                                kw...) where T <: Real
+                                                                kw...)::Tuple{T, MonoDecomp{T}} where T <: Real
     D, μ0, μs0, errs, σerrs, yhat, yhatnew = cv_mono_decomp_ss(x, y; one_se_rule = one_se_rule, 
             one_se_rule_pre = one_se_rule_pre,
             nfold = nfold, seed = seed, method = md_method, kw...)

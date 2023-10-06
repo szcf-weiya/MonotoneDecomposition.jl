@@ -39,6 +39,47 @@ function ecos()
     global OPTIMIZER = ECOS.Optimizer
 end
 
+abstract type WorkSpace end
+
+# difference compared to MonoDecomp
+# workspace can be shared with different tuning parameters
+# MonoDecomp records the specific results with particular parameters
+mutable struct WorkSpaceSS <: WorkSpace
+    evaluated::Bool
+    J::Int
+    B::Matrix{Float64}
+    L::Matrix{Float64}
+    H::Matrix{Int}
+    mx::Real
+    rx::Real
+    idx::Vector{Int}
+    idx0::Vector{Int}
+    Bend::Matrix{Float64}
+    Bendd::Matrix{Float64}
+    knots::Vector{Float64}
+    # Bnew::AbstractMatrix{Float64} # not for cross-validation
+    WorkSpaceSS() = new()
+    # WorkSpaceSS(e, j, b, l, h, m, r, i, i0, be, bd, k) = new(e, j, b, l, h, m, r, i, i0, be, bd, k)
+end
+
+mutable struct WorkSpaceCS <: WorkSpace
+    evaluated::Bool
+    J::Int
+    B::Matrix{Float64}
+    rB::RObject
+    H::Matrix{Int}
+    WorkSpaceCS() = new()
+end
+
+struct MonoDecomp{T <: AbstractFloat}
+    γup::Vector{T}
+    γdown::Vector{T}
+    γhat::Vector{T}
+    yhat::Vector{T}
+    λ::Union{T, Nothing}
+    μ::Union{T, Nothing}
+    workspace::WorkSpace
+end
 
 """
     mono_decomp(y::AbstractVector)
@@ -180,7 +221,7 @@ function mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T};
                     s = 1.0, s_is_μ = true,
                     J = 4,
                     workspace = nothing,
-                    ) where T <: AbstractFloat
+                    )::MonoDecomp{T} where T <: AbstractFloat
     if isnothing(workspace) || !workspace.evaluated
         workspace = WorkSpaceCS()
         B, rB = build_model(x, J)
@@ -243,38 +284,6 @@ function cv_cubic_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abstr
     end
     yhat, yhatnew = cubic_spline(Jopt)(x, y, xnew)
     return Jopt, yhat, yhatnew
-end
-
-abstract type WorkSpace end
-
-# difference compared to MonoDecomp
-# workspace can be shared with different tuning parameters
-# MonoDecomp records the specific results with particular parameters
-mutable struct WorkSpaceSS <: WorkSpace
-    evaluated::Bool
-    J::Int
-    B::AbstractMatrix{Float64}
-    L::AbstractMatrix{Float64}
-    H::AbstractMatrix{Int}
-    mx::Real
-    rx::Real
-    idx::AbstractVector{Int}
-    idx0::AbstractVector{Int}
-    Bend::AbstractMatrix{Float64}
-    Bendd::AbstractMatrix{Float64}
-    knots::AbstractVector{Float64}
-    # Bnew::AbstractMatrix{Float64} # not for cross-validation
-    WorkSpaceSS() = new()
-    # WorkSpaceSS(e, j, b, l, h, m, r, i, i0, be, bd, k) = new(e, j, b, l, h, m, r, i, i0, be, bd, k)
-end
-
-mutable struct WorkSpaceCS <: WorkSpace
-    evaluated::Bool
-    J::Int
-    B::AbstractMatrix{Float64}
-    rB::RObject
-    H::AbstractMatrix{Int}
-    WorkSpaceCS() = new()
 end
 
 """
@@ -1017,16 +1026,6 @@ function _optim(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T}, s::Union{Not
     return γhat
 end
 
-struct MonoDecomp{T <: AbstractFloat}
-    γup::AbstractVector{T}
-    γdown::AbstractVector{T}
-    γhat::AbstractVector{T}
-    yhat::AbstractVector{T}
-    λ::Union{Real, Nothing}
-    μ::Union{Real, Nothing}
-    workspace::WorkSpace
-end
-
 function build_model!(workspace::WorkSpaceSS, x::AbstractVector{T}; ε = eps()^(1/3), prop_nknots = 1.0) where T <: AbstractFloat
     if !isdefined(workspace, 3) # the first two will be automatically initialized
         knots, mx, rx, idx, idx0 = pick_knots(x, all_knots = false, prop_nknots = prop_nknots)
@@ -1046,7 +1045,7 @@ function build_model!(workspace::WorkSpaceSS, x::AbstractVector{T}; ε = eps()^(
             @debug "$e: standard cholesky failed, use pivoted cholesky"
             ## perform pivoted Cholesky
             chol = cholesky(Symmetric(Ω), Val(true), check = false)
-            workspace.L = chol.L[invperm(chol.p), 1:chol.rank]
+            workspace.L = Matrix(chol.L[invperm(chol.p), 1:chol.rank])
         end
         # cannot update workspace in the argument
         workspace.evaluated = true
@@ -1064,7 +1063,7 @@ end
 
 Monotone decomposition with smoothing splines.
 """
-function mono_decomp_ss(workspace::WorkSpaceSS, x::AbstractVector{T}, y::AbstractVector{T}, λ::AbstractFloat, s::AbstractFloat; s_is_μ = true, prop_nknots = 1.0, strict = false) where T <: AbstractFloat
+function mono_decomp_ss(workspace::WorkSpaceSS, x::AbstractVector{T}, y::AbstractVector{T}, λ::AbstractFloat, s::AbstractFloat; s_is_μ = true, prop_nknots = 1.0, strict = false)::MonoDecomp{T} where T <: AbstractFloat
     build_model!(workspace, x, prop_nknots = prop_nknots)
     if s_is_μ
         γhat = _optim(y, workspace.J, workspace.B, nothing, workspace.H, L = workspace.L, t = nothing, λ = λ, μ = s, strict = strict)
