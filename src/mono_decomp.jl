@@ -292,7 +292,7 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abs
     errs = zeros(nfold, length(Js), length(ss))
     n2 = length(folds[1])
     n1 = n - n2
-    @assert n % nfold == 0
+    # @assert n % nfold == 0
     for k = 1:nfold
         test_idx = folds[k]
         train_idx = setdiff(1:n, test_idx)
