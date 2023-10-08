@@ -282,10 +282,10 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
     for i = 1:nrep
         yi = construct_bootstrap_y(y, error, D.workspace.B, D.γup, c, nblock = nblock)
         try
-            Di = mono_decomp_cs(x, yi, s = μ, s_is_μ = true, J = J)
+            Di = mono_decomp_cs(x, yi, s = μ, s_is_μ = true, J = J, workspace = D.workspace)
             ts[i] = var(Di.γdown)
-        catch
-            @warn "due to error in optimization, assign test statistic as Inf"
+        catch e
+            @warn "due to error $e in optimization, assign test statistic as Inf"
             ts[i] = Inf
         end
     end
@@ -489,10 +489,12 @@ function mono_test_bootstrap_ss(x::AbstractVector{T}, y::AbstractVector{T}; nrep
                                                                 nfold = 5,
                                                                 seed = rand(UInt64),
                                                                 md_method = "double_grid",
+                                                                rλs=10.0 .^ (0:0),
                                                                 nblock = -1, # wild bootstrap
                                                                 kw...)::Tuple{T, MonoDecomp{T}} where T <: Real
     D, μ0, μs0, errs, σerrs, yhat, yhatnew = cv_mono_decomp_ss(x, y; one_se_rule = one_se_rule, 
             one_se_rule_pre = one_se_rule_pre,
+            rλs = rλs,
             nfold = nfold, seed = seed, method = md_method, kw...)
     error = y - D.yhat
     c = mean(D.yhat) / 2
@@ -504,8 +506,8 @@ function mono_test_bootstrap_ss(x::AbstractVector{T}, y::AbstractVector{T}; nrep
         try
             Di = mono_decomp_ss(D.workspace, x, yi, D.λ, D.μ, strict = true)
             ts[i] = var(Di.γdown)
-        catch
-            @warn "due to error in optimization, assign test statistic as Inf"
+        catch e
+            @warn "due to error $e in optimization, assign test statistic as Inf"
             ts[i] = Inf
         end
     end

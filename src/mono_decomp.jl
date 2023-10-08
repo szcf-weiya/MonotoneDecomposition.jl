@@ -239,7 +239,7 @@ function mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T};
     γup = _γhat[1:J]
     γdown = _γhat[J+1:2J]
     γhat = γup .+ γdown
-    yhat = B * γhat
+    yhat = workspace.B * γhat
     return MonoDecomp(γup, γdown, γhat, yhat, 0.0, s, workspace)
 end
 
