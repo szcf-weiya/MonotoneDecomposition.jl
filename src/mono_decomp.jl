@@ -232,13 +232,14 @@ function mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T};
         workspace.H = construct_H(J)
     end
     if s_is_μ
-        γhat = _optim(y, workspace, [s])[:]
+        _γhat = _optim(y, workspace, [s])[:]
     else
-        γhat = _optim(y, workspace.J, workspace.B, s, workspace.H)
+        _γhat = _optim(y, workspace.J, workspace.B, s, workspace.H)
     end
-    γup = γhat[1:J]
-    γdown = γhat[J+1:2J]
-    yhat = B * (γup .+ γdown)
+    γup = _γhat[1:J]
+    γdown = _γhat[J+1:2J]
+    γhat = γup .+ γdown
+    yhat = B * γhat
     return MonoDecomp(γup, γdown, γhat, yhat, 0.0, s, workspace)
 end
 
@@ -246,7 +247,7 @@ MDCS = mono_decomp_cs
 
 function cubic_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::AbstractVector{T}; J = 4) where T <: AbstractFloat
     spl = MonotoneSplines.bspline(x, y, J)
-    return MonotoneSplines.predict(spl, x), MonotoneSplines.predict(spl, xnew), spl
+    return MonotoneSplines.predict(spl, x), MonotoneSplines.predict(spl, xnew)#, spl
 end
 
 mono_decomp_cs(J) = (x, y; kw...) -> mono_decomp_cs(x, y; J = J, kw...)
@@ -312,9 +313,9 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abs
             # workspace = nothing
             @assert s_is_μ
             γhats = _optim(y[train_idx], workspace, ss)
-            ynews = predict(workspace, x[test_idx], γhats[1:J, :] + γhats[J+1:2J, :])
+            ynews = predict(workspace, x[test_idx], γhats[1:J, :] .+ γhats[J+1:2J, :])
             for (i, s) in enumerate(ss)
-                errs[k, j, i] = norm(ynews[:, i] - y[test_idx])^2 / length(test_idx)
+                errs[k, j, i] = norm(ynews[:, i] .- y[test_idx])^2 / length(test_idx)
             end
         end
     end
@@ -334,7 +335,7 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abs
         savefig(cvplot(μerr, σerr, 1.0 .* Js, ss, lbl = ["J", "μ"], nfold = nfold, ind0 = ind), figname)
     end
     D = mono_decomp_cs(Jopt)(x, y; s = sopt)
-    return D, ss[argmin(μerr)[2]], ss, μerr, σerr  # use for recording without 1se
+    return D, ss[argmin(μerr)[2]], μerr, σerr  # use for recording without 1se
 end
 
 """
@@ -350,7 +351,7 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}; ss = 10.0
                                                             x0 = x,
                                                             Js = 4:50,
                                                             one_se_rule = false,
-                                                            one_se_rule_pre = false) where T <: AbstractFloat
+                                                            one_se_rule_pre = false)::Tuple{MonoDecomp{T}, T, Array{T}, Array{T}} where T <: AbstractFloat
     if fixJ
         if length(Js) == 1
             J = Js[1]
@@ -359,7 +360,7 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}; ss = 10.0
             J, yhat, yhatnew = cv_cubic_spline(x, y, x0, one_se_rule = one_se_rule_pre, nfold = nfold_pre, Js = Js,
                                                 figname = isnothing(figname) ? figname : figname[1:end-4] * "_bspl.png")
         end
-        return cv_mono_decomp_cs(x, y, x0, Js = J:J, ss = ss, figname = figname, nfold = nfold, one_se_rule = one_se_rule)..., yhat, yhatnew
+        return cv_mono_decomp_cs(x, y, x0, Js = J:J, ss = ss, figname = figname, nfold = nfold, one_se_rule = one_se_rule)
     else
         return cv_mono_decomp_cs(x, y, x0, ss = ss, Js = Js, figname = figname, nfold = nfold, one_se_rule = one_se_rule)
     end
@@ -1066,15 +1067,15 @@ Monotone decomposition with smoothing splines.
 function mono_decomp_ss(workspace::WorkSpaceSS, x::AbstractVector{T}, y::AbstractVector{T}, λ::AbstractFloat, s::AbstractFloat; s_is_μ = true, prop_nknots = 1.0, strict = false)::MonoDecomp{T} where T <: AbstractFloat
     build_model!(workspace, x, prop_nknots = prop_nknots)
     if s_is_μ
-        γhat = _optim(y, workspace.J, workspace.B, nothing, workspace.H, L = workspace.L, t = nothing, λ = λ, μ = s, strict = strict)
+        _γhat = _optim(y, workspace.J, workspace.B, nothing, workspace.H, L = workspace.L, t = nothing, λ = λ, μ = s, strict = strict)
     else
-        γhat = _optim(y, workspace.J, workspace.B, s, workspace.H, L = workspace.L, t = nothing, λ = λ, strict = strict)
+        _γhat = _optim(y, workspace.J, workspace.B, s, workspace.H, L = workspace.L, t = nothing, λ = λ, strict = strict)
     end
     # calculate properties of monotone decomposition
     J = workspace.J
-    γup = γhat[1:J]
-    γdown = γhat[J+1:2J]
-    γhat = γup + γdown
+    γup = _γhat[1:J]
+    γdown = _γhat[J+1:2J]
+    γhat = γup .+ γdown
     yhat = workspace.B * γhat
     return MonoDecomp(γup, γdown, γhat, yhat, λ, s, workspace)
 end

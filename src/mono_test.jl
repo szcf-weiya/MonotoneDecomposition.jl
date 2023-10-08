@@ -268,13 +268,13 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
                                             figname = nothing,
                                             nfold = 10, nfold_pre = 10,
                                             kw...)::Tuple{T, MonoDecomp{T}} where T <: Real
-    D, μ, μs = cv_mono_decomp_cs(x, y, ss = μs, one_se_rule = one_se_rule, fixJ = fixJ, Js = Js, one_se_rule_pre = one_se_rule_pre, figname = figname, nfold = nfold, nfold_pre = nfold_pre)
+    D, μ = cv_mono_decomp_cs(x, y, ss = μs, one_se_rule = one_se_rule, fixJ = fixJ, Js = Js, one_se_rule_pre = one_se_rule_pre, figname = figname, nfold = nfold, nfold_pre = nfold_pre)
     @debug D.γdown
     J = D.workspace.J
     # scatter(x, y)
     # plot!(x, res.yhat)
     c = mean(D.yhat) / 2
-    error = y - D.yhat
+    error = y .- D.yhat
     @debug maximum(max.(error))
     # σ = std(err)
     tobs = var(D.γdown)
@@ -301,7 +301,8 @@ function mono_test_bootstrap_sup(x::AbstractVector{T}, y::AbstractVector{T};
                                                             nblock = 10,
                                                             kw...) where T <: AbstractFloat
     n = length(y)
-    D1, μ0, μs0 = cv_mono_decomp_cs(x, y, ss = 10.0 .^ (-6:0.5:6), one_se_rule = true, fixJ = fixJ, nfold = nfold)
+    μs0 = 10.0 .^ (-6:0.5:6)
+    D1, μ0 = cv_mono_decomp_cs(x, y, ss = μs0, one_se_rule = true, fixJ = fixJ, nfold = nfold)
     μ1 = D1.μ
     J = D1.workspace.J
     # μ0 < μ1
@@ -383,7 +384,7 @@ function construct_bootstrap_y(y::AbstractVector{T}, e::AbstractVector{T}, B::Ab
         idx = sample(1:n, n)
         ei = e[idx] .- mean(e[idx]) .+ mean(e)
     end
-    yi = B * γ .+ c + ei
+    yi = B * γ .+ c .+ ei
     if debias_mean_yi
         yi = yi .- mean(yi) .+ mean(y) 
     end
