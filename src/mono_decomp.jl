@@ -247,7 +247,7 @@ MDCS = mono_decomp_cs
 
 function cubic_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::AbstractVector{T}; J = 4) where T <: AbstractFloat
     spl = MonotoneSplines.bspline(x, y, J)
-    return MonotoneSplines.predict(spl, x), MonotoneSplines.predict(spl, xnew)#, spl
+    return MonotoneSplines.predict(spl, x), MonotoneSplines.predict(spl, xnew), spl
 end
 
 mono_decomp_cs(J) = (x, y; kw...) -> mono_decomp_cs(x, y; J = J, kw...)
