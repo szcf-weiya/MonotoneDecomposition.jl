@@ -267,8 +267,9 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
                                             one_se_rule_pre = false, 
                                             figname = nothing,
                                             nfold = 10, nfold_pre = 10,
+                                            use_GI = true,
                                             kw...)::Tuple{T, MonoDecomp{T}} where T <: Real
-    D, μ = cv_mono_decomp_cs(x, y, ss = μs, one_se_rule = one_se_rule, fixJ = fixJ, Js = Js, one_se_rule_pre = one_se_rule_pre, figname = figname, nfold = nfold, nfold_pre = nfold_pre)
+    D, μ = cv_mono_decomp_cs(x, y, ss = μs, one_se_rule = one_se_rule, fixJ = fixJ, Js = Js, one_se_rule_pre = one_se_rule_pre, figname = figname, nfold = nfold, nfold_pre = nfold_pre, use_GI = use_GI)
     @debug D.γdown
     J = D.workspace.J
     # scatter(x, y)
@@ -284,7 +285,7 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
     for i = 1:nrep
         yi = construct_bootstrap_y(y, error, yhat, nblock = nblock)
         try
-            Di = mono_decomp_cs(x, yi, s = μ, s_is_μ = true, J = J, workspace = D.workspace)
+            Di = mono_decomp_cs(x, yi, s = μ, s_is_μ = true, J = J, workspace = D.workspace, use_GI = use_GI)
             # println("address of Di.w: ", pointer_from_objref(Di.workspace))
             ts[i] = var(Di.γdown)
         catch e

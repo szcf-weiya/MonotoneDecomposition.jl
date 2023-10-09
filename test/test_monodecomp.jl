@@ -427,6 +427,15 @@ end
     c = sum([B[:, i]' * B * γhat for i = 1:J]) / 2n
 end
 
+@testset "GI solver for MDCS" begin
+    tol = 1e-7
+    x, y, _ = gen_data(100, 0.1, x->x^3)
+    D1 = mono_decomp_cs(x, y, s = 1.0, J = 10, use_GI = true)
+    D2 = mono_decomp_cs(x, y, s = 1.0, J = 10, use_GI = false)
+    @test all(abs.(D1.γdown - D2.γdown) .< tol)
+    @test all(abs.(D1.γup - D2.γup) .< tol)    
+end
+
 @testset "verify proposition (y = x^2)" begin
     f = x -> x^2
     n = 100

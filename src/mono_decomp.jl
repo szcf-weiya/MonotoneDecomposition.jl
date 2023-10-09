@@ -11,6 +11,7 @@ using LaTeXTables
 using Serialization
 using ProgressMeter
 using Gurobi
+using GoldfarbIdnaniSolver
 using MonotoneSplines
 import MonotoneSplines.build_model
 import MonotoneSplines.pick_knots
@@ -68,6 +69,8 @@ mutable struct WorkSpaceCS <: WorkSpace
     B::Matrix{Float64}
     rB::RObject
     H::Matrix{Int}
+    W::Matrix{Float64} # [B'; -B'] * [B -B]
+    V::Matrix{Float64} # [B'; B'] * [B B]
     WorkSpaceCS() = new()
 end
 
@@ -218,9 +221,10 @@ end
 Monotone Decomposition with Cubic B-splines by solving an optimization problem.
 """
 function mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}; 
-                    s = 1.0, s_is_μ = true,
+                    s::T = 1.0, s_is_μ = true,
                     J = 4,
                     workspace = nothing,
+                    use_GI = false,
                     )::MonoDecomp{T} where T <: AbstractFloat
     if isnothing(workspace) || !workspace.evaluated
         workspace = WorkSpaceCS()
@@ -230,11 +234,24 @@ function mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T};
         workspace.rB = rB
         workspace.J = J
         workspace.H = construct_H(J)
+        if use_GI
+            workspace.W = [B'; -B'] * [B -B]
+            workspace.V = [B'; B'] * [B B]
+        end
     end
-    if s_is_μ
-        _γhat = _optim(y, workspace, [s])[:]
+    if use_GI
+        _γhat = try
+            _optim(y, workspace, s)
+        catch e
+            @warn "GI solver failed due to $e; use default solver"
+            _optim(y, workspace, [s])[:]
+        end
     else
-        _γhat = _optim(y, workspace.J, workspace.B, s, workspace.H)
+        if s_is_μ
+            _γhat = _optim(y, workspace, [s])[:]
+        else
+            _γhat = _optim(y, workspace.J, workspace.B, s, workspace.H)
+        end    
     end
     γup = _γhat[1:J]
     γdown = _γhat[J+1:2J]
@@ -296,7 +313,7 @@ Cross-validation for Monotone Decomposition with Cubic B-splines. Parameters `J`
 - if `fixJ == true`, then `J` is CV-tuned by the corresponding cubic B-spline fitting
 - if `fixJ == false`, then both `J` and `s` would be tuned by cross-validation.
 """
-function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}, xnew::AbstractVector{T}; nfold = 10, Js = 4:50, ss = 10.0 .^ (-6:0.1:-1), s_is_μ = true, figname = nothing, one_se_rule = false) where T <: AbstractFloat
+function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}, xnew::AbstractVector{T}; nfold = 10, Js = 4:50, ss = 10.0 .^ (-6:0.1:-1), s_is_μ = true, figname = nothing, one_se_rule = false, use_GI = false) where T <: AbstractFloat
     n = length(x)
     folds = div_into_folds(n, K = nfold, seed = rand(UInt64))
     errs = zeros(nfold, length(Js), length(ss))
@@ -334,7 +351,7 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abs
         serialize(silname, [μerr, σerr, Jopt, sopt, Js, ss, nfold])
         savefig(cvplot(μerr, σerr, 1.0 .* Js, ss, lbl = ["J", "μ"], nfold = nfold, ind0 = ind), figname)
     end
-    D = mono_decomp_cs(Jopt)(x, y; s = sopt)
+    D = mono_decomp_cs(Jopt)(x, y; s = sopt, use_GI = use_GI)
     return D, ss[argmin(μerr)[2]], μerr, σerr  # use for recording without 1se
 end
 
@@ -351,18 +368,23 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}; ss = 10.0
                                                             x0 = x,
                                                             Js = 4:50,
                                                             one_se_rule = false,
+                                                            use_GI = false, # currently only for single μ
                                                             one_se_rule_pre = false)::Tuple{MonoDecomp{T}, T, Array{T}, Array{T}} where T <: AbstractFloat
     if fixJ
         if length(Js) == 1
             J = Js[1]
+            if length(ss) == 1
+                D = mono_decomp_cs(J)(x, y; s = ss[1], use_GI = use_GI)
+                return D, ss[1], [0.0], [0.0]
+            end    
             yhat, yhatnew = cubic_spline(J)(x, y, x0)
         else
             J, yhat, yhatnew = cv_cubic_spline(x, y, x0, one_se_rule = one_se_rule_pre, nfold = nfold_pre, Js = Js,
                                                 figname = isnothing(figname) ? figname : figname[1:end-4] * "_bspl.png")
         end
-        return cv_mono_decomp_cs(x, y, x0, Js = J:J, ss = ss, figname = figname, nfold = nfold, one_se_rule = one_se_rule)
+        return cv_mono_decomp_cs(x, y, x0, Js = J:J, ss = ss, figname = figname, nfold = nfold, one_se_rule = one_se_rule, use_GI = use_GI)
     else
-        return cv_mono_decomp_cs(x, y, x0, ss = ss, Js = Js, figname = figname, nfold = nfold, one_se_rule = one_se_rule)
+        return cv_mono_decomp_cs(x, y, x0, ss = ss, Js = Js, figname = figname, nfold = nfold, one_se_rule = one_se_rule, use_GI = use_GI)
     end
 end
 
@@ -811,6 +833,13 @@ Optimization for monotone decomposition with smoothing splines.
 
 
 """
+function _optim(y::AbstractVector{T}, workspace::WorkSpaceCS, μ::T) where T <: AbstractFloat
+    D = workspace.V .+ μ * workspace.W
+    q = workspace.B' * y
+    sol, lagr, crval, iact, nact, iter = solveQP(D, vcat(q, q), -workspace.H'*1.0, zeros(2(workspace.J-1)))
+    return sol
+end
+
 function _optim(y::AbstractVector{T}, workspace::WorkSpaceCS, μs::AbstractVector{T}) where T <: AbstractFloat
     @assert workspace.evaluated
     return _optim(y, workspace.J, workspace.B, workspace.H, μs)
