@@ -279,10 +279,13 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
     # σ = std(err)
     tobs = var(D.γdown)
     ts = zeros(nrep)
+    # println("address of D.w: ", pointer_from_objref(D.workspace))
+    yhat = D.workspace.B * D.γup .+ c
     for i = 1:nrep
-        yi = construct_bootstrap_y(y, error, D.workspace.B, D.γup, c, nblock = nblock)
+        yi = construct_bootstrap_y(y, error, yhat, nblock = nblock)
         try
             Di = mono_decomp_cs(x, yi, s = μ, s_is_μ = true, J = J, workspace = D.workspace)
+            # println("address of Di.w: ", pointer_from_objref(Di.workspace))
             ts[i] = var(Di.γdown)
         catch e
             @warn "due to error $e in optimization, assign test statistic as Inf"
@@ -368,7 +371,8 @@ function block_bootstrap_idx(e::AbstractVector; nblock = 10)
     return idx, μb, μi
 end
 
-function construct_bootstrap_y(y::AbstractVector{T}, e::AbstractVector{T}, B::AbstractMatrix{T}, γ::AbstractVector{T}, c::T; nblock = -1, σe = std(e), debias_mean_yi = true) where T <: AbstractFloat
+## yhat = B*γ .+ c
+function construct_bootstrap_y(y::AbstractVector{T}, e::AbstractVector{T}, yhat::AbstractVector{T}; nblock = -1, σe = std(e), debias_mean_yi = true) where T <: AbstractFloat
     n = length(y)
     if nblock > 0
         idx, μb, μi = block_bootstrap_idx(e; nblock = nblock)
@@ -384,11 +388,15 @@ function construct_bootstrap_y(y::AbstractVector{T}, e::AbstractVector{T}, B::Ab
         idx = sample(1:n, n)
         ei = e[idx] .- mean(e[idx]) .+ mean(e)
     end
-    yi = B * γ .+ c .+ ei
+    yi = yhat .+ ei
     if debias_mean_yi
-        yi = yi .- mean(yi) .+ mean(y) 
+        yi .= yi .- mean(yi) .+ mean(y) 
     end
     return yi
+end
+
+function construct_bootstrap_y(y::AbstractVector{T}, e::AbstractVector{T}, B::AbstractMatrix{T}, γ::AbstractVector{T}, c::T; nblock = -1, σe = std(e), debias_mean_yi = true) where T <: AbstractFloat
+    return construct_bootstrap_y(y, e, B * γ .+ c, nblock = nblock, σe = σe, debias_mean_yi = debias_mean_yi)
 end
 
 function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T}; 
@@ -492,7 +500,7 @@ function mono_test_bootstrap_ss(x::AbstractVector{T}, y::AbstractVector{T}; nrep
                                                                 rλs=10.0 .^ (0:0),
                                                                 nblock = -1, # wild bootstrap
                                                                 kw...)::Tuple{T, MonoDecomp{T}} where T <: Real
-    D, μ0, μs0, errs, σerrs, yhat, yhatnew = cv_mono_decomp_ss(x, y; one_se_rule = one_se_rule, 
+    D, _ = cv_mono_decomp_ss(x, y; one_se_rule = one_se_rule, 
             one_se_rule_pre = one_se_rule_pre,
             rλs = rλs,
             nfold = nfold, seed = seed, method = md_method, kw...)
@@ -501,8 +509,9 @@ function mono_test_bootstrap_ss(x::AbstractVector{T}, y::AbstractVector{T}; nrep
     error = y - D.yhat
     tobs = var(D.γdown)
     ts = zeros(nrep)
+    yhat = D.workspace.B * D.γup .+ c
     for i = 1:nrep
-        yi = construct_bootstrap_y(y, error, D.workspace.B, D.γup, c, nblock = nblock)
+        yi = construct_bootstrap_y(y, error, yhat, nblock = nblock)
         try
             Di = mono_decomp_ss(D.workspace, x, yi, D.λ, D.μ, strict = true)
             ts[i] = var(Di.γdown)

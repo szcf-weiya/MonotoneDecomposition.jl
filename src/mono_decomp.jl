@@ -76,8 +76,8 @@ struct MonoDecomp{T <: AbstractFloat}
     γdown::Vector{T}
     γhat::Vector{T}
     yhat::Vector{T}
-    λ::Union{T, Nothing}
-    μ::Union{T, Nothing}
+    λ::T
+    μ::T
     workspace::WorkSpace
 end
 
