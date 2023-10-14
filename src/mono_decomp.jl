@@ -228,16 +228,8 @@ function mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T};
                     )::MonoDecomp{T} where T <: AbstractFloat
     if isnothing(workspace) || !workspace.evaluated
         workspace = WorkSpaceCS()
-        B, rB = build_model(x, J)
-        workspace.evaluated = true
-        workspace.B = B
-        workspace.rB = rB
         workspace.J = J
-        workspace.H = construct_H(J)
-        if use_GI
-            workspace.W = [B'; -B'] * [B -B]
-            workspace.V = [B'; B'] * [B B]
-        end
+        build_model!(workspace, x, use_GI = use_GI)
     end
     if use_GI
         _γhat = try
@@ -326,10 +318,14 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abs
         for (j, J) in enumerate(Js)
             workspace = WorkSpaceCS()
             workspace.J = J
-            build_model!(workspace, x[train_idx])
+            build_model!(workspace, x[train_idx], use_GI = use_GI)
             # workspace = nothing
             @assert s_is_μ
-            γhats = _optim(y[train_idx], workspace, ss)
+            if use_GI
+                γhats = hcat([_optim(y[train_idx], workspace, μ) for μ in ss]...)
+            else
+                γhats = _optim(y[train_idx], workspace, ss)
+            end
             ynews = predict(workspace, x[test_idx], γhats[1:J, :] .+ γhats[J+1:2J, :])
             for (i, s) in enumerate(ss)
                 errs[k, j, i] = norm(ynews[:, i] .- y[test_idx])^2 / length(test_idx)
@@ -370,6 +366,9 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}; ss = 10.0
                                                             one_se_rule = false,
                                                             use_GI = false, # currently only for single μ
                                                             one_se_rule_pre = false)::Tuple{MonoDecomp{T}, T, Array{T}, Array{T}} where T <: AbstractFloat
+    if length(Js) == 1
+        fixJ = true # only one J can be selected
+    end
     if fixJ
         if length(Js) == 1
             J = Js[1]
@@ -377,9 +376,8 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}; ss = 10.0
                 D = mono_decomp_cs(J)(x, y; s = ss[1], use_GI = use_GI)
                 return D, ss[1], [0.0], [0.0]
             end    
-            yhat, yhatnew = cubic_spline(J)(x, y, x0)
         else
-            J, yhat, yhatnew = cv_cubic_spline(x, y, x0, one_se_rule = one_se_rule_pre, nfold = nfold_pre, Js = Js,
+            J, _ = cv_cubic_spline(x, y, x0, one_se_rule = one_se_rule_pre, nfold = nfold_pre, Js = Js,
                                                 figname = isnothing(figname) ? figname : figname[1:end-4] * "_bspl.png")
         end
         return cv_mono_decomp_cs(x, y, x0, Js = J:J, ss = ss, figname = figname, nfold = nfold, one_se_rule = one_se_rule, use_GI = use_GI)
@@ -1273,13 +1271,17 @@ end
 
 Calculate components that construct the optimization problem for Monotone Decomposition with Cubic splines.
 """
-function build_model!(workspace::WorkSpaceCS, x::AbstractVector{T}) where T <: AbstractFloat
+function build_model!(workspace::WorkSpaceCS, x::AbstractVector{T}; use_GI = false) where T <: AbstractFloat
     J = workspace.J
-    rB = R"splines::bs($x, df=$J, intercept=TRUE)"
-    workspace.B = rcopy(rB)
+    B, rB = build_model(x, J)
+    workspace.B = B
     workspace.rB = rB
     workspace.evaluated = true
     workspace.H = construct_H(J)
+    if use_GI
+        workspace.W = [B'; -B'] * [B -B]
+        workspace.V = [B'; B'] * [B B]
+    end
 end
 
 """

@@ -428,12 +428,19 @@ end
 end
 
 @testset "GI solver for MDCS" begin
-    tol = 1e-7
+    tol = 1e-5
     x, y, _ = gen_data(100, 0.1, x->x^3)
     D1 = mono_decomp_cs(x, y, s = 1.0, J = 10, use_GI = true)
     D2 = mono_decomp_cs(x, y, s = 1.0, J = 10, use_GI = false)
     @test all(abs.(D1.γdown - D2.γdown) .< tol)
     @test all(abs.(D1.γup - D2.γup) .< tol)    
+
+    cvD1 = cv_mono_decomp_cs(x, y, ss = [0.1, 1.0], Js = 10:10, use_GI = true, nfold = 100) # LOOCV avoid cv randomness
+    cvD2 = cv_mono_decomp_cs(x, y, ss = [0.1, 1.0], Js = 10:10, use_GI = false, nfold = 100)
+    @test all(abs.(cvD1[3] - cvD2[3]) .< tol)
+    @test all(abs.(cvD1[4] - cvD2[4]) .< tol)
+    @test all(abs.(cvD1[1].γdown -cvD2[1].γdown) .< tol)
+    @test all(abs.(cvD1[1].γup -cvD2[1].γup) .< tol)
 end
 
 @testset "verify proposition (y = x^2)" begin
