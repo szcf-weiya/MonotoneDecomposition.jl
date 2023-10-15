@@ -268,6 +268,7 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
                                             figname = nothing,
                                             nfold = 10, nfold_pre = 10,
                                             use_GI = true,
+                                            h0_mono = false, # increasing or decreasing
                                             kw...)::Tuple{T, MonoDecomp{T}} where T <: Real
     D, μ = cv_mono_decomp_cs(x, y, ss = μs, one_se_rule = one_se_rule, fixJ = fixJ, Js = Js, one_se_rule_pre = one_se_rule_pre, figname = figname, nfold = nfold, nfold_pre = nfold_pre, use_GI = use_GI)
     @debug D.γdown
@@ -279,15 +280,30 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
     @debug maximum(max.(error))
     # σ = std(err)
     tobs = var(D.γdown)
+    flag_incr = true
+    if h0_mono
+        tobs1 = var(D.γup)
+        if tobs1 < tobs
+            flag_incr = false
+            tobs = tobs1
+        end
+    end
     ts = zeros(nrep)
     # println("address of D.w: ", pointer_from_objref(D.workspace))
     yhat = D.workspace.B * D.γup .+ c
+    if !flag_incr
+        yhat = D.workspace.B * D.γdown .+ c
+    end
     for i = 1:nrep
         yi = construct_bootstrap_y(y, error, yhat, nblock = nblock)
         try
             Di = mono_decomp_cs(x, yi, s = μ, s_is_μ = true, J = J, workspace = D.workspace, use_GI = use_GI)
             # println("address of Di.w: ", pointer_from_objref(Di.workspace))
-            ts[i] = var(Di.γdown)
+            if h0_mono
+                ts[i] = min(var(Di.γdown), var(Di.γup))
+            else
+                ts[i] = var(Di.γdown)
+            end
         catch e
             @warn "due to error $e in optimization, assign test statistic as Inf"
             ts[i] = Inf

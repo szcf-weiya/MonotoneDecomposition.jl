@@ -5,8 +5,10 @@ using MonotoneDecomposition
 @testset "simple examples" begin
     x = randn(100)
     @test MonotoneDecomposition.mono_test_bootstrap_cs(x, x)[1] > 0.05
+    @test MonotoneDecomposition.mono_test_bootstrap_cs(x, x, h0_mono = true)[1] > 0.05
     @test MonotoneDecomposition.mono_test_bootstrap_ss(x, x)[1] > 0.05
     @test MonotoneDecomposition.mono_test_bootstrap_cs(x, x.^2)[1] < 0.05
+    @test MonotoneDecomposition.mono_test_bootstrap_cs(x, x.^2, h0_mono = true)[1] < 0.05
     @test MonotoneDecomposition.mono_test_bootstrap_ss(x, x.^2)[1] < 0.05
 end
 
