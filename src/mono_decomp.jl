@@ -450,8 +450,12 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
     s_smoothness = λ * (γup .+ γdown)' * Ω * (γup .+ γdown)
     # s_discrepancy = [max(eps(), min(s_residual, s_smoothness)) / 10^k_magnitude, 
     #                             max(s_residual, s_smoothness) * 10^k_magnitude]
-    s_discrepancy = [eps(), max(s_residual, s_smoothness) * 10^k_magnitude]
+    s_discrepancy = [eps(), max(s_residual, s_smoothness, eps()) * 10^k_magnitude]
+    if s0 == 0
+        μrange = [eps(), eps() * 10^k_magnitude]
+    else
         μrange = s_discrepancy / s0^2
+    end
     verbose && @info "μrange for compatible terms: $μrange"
     verbose && @info "s0 = $s0, s_residual = $s_residual, s_smoothness = $s_smoothness, s_discrepancy = $s_discrepancy"
     if μrange[2] < minmaxμ # cbrt of eps()

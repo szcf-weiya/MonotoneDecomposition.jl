@@ -12,6 +12,14 @@ using MonotoneDecomposition
     @test MonotoneDecomposition.mono_test_bootstrap_ss(x, x.^2)[1] < 0.05
 end
 
+@testset "both components are zero" begin
+    x = randn(100)
+    y = zeros(100)
+    @test MonotoneDecomposition.mono_test_bootstrap_cs(x, x)[1] > 0.05
+    @test MonotoneDecomposition.mono_test_bootstrap_cs(x, x, h0_mono = true)[1] > 0.05
+    @test MonotoneDecomposition.mono_test_bootstrap_ss(x, x)[1] > 0.05
+end
+
 @testset "ghosal constant" begin
     @test MonotoneDecomposition.ghosal_λ() ≈ 9.974576271186443 atol=1e-5
     c = MonotoneDecomposition.ghosal_critical_value()

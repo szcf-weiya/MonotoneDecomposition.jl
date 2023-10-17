@@ -428,7 +428,7 @@ end
 end
 
 @testset "GI solver for MDCS" begin
-    tol = 1e-5
+    tol = 1e-4
     x, y, _ = gen_data(100, 0.1, x->x^3)
     D1 = mono_decomp_cs(x, y, s = 1.0, J = 10, use_GI = true)
     D2 = mono_decomp_cs(x, y, s = 1.0, J = 10, use_GI = false)

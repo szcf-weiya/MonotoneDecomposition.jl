@@ -311,7 +311,7 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
     end
     @debug ts
     @debug tobs
-    pval = sum(ts .> tobs) / nrep
+    pval = (sum(ts .> tobs) + sum(ts .== tobs) * 0.5) / nrep
     return pval, D
 end
 
@@ -537,7 +537,7 @@ function mono_test_bootstrap_ss(x::AbstractVector{T}, y::AbstractVector{T}; nrep
             ts[i] = Inf
         end
     end
-    pval = sum(ts .> tobs) / nrep
+    pval = (sum(ts .> tobs) + sum(ts .== tobs) * 0.5) / nrep
     return pval, D
 end
 
