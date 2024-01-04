@@ -65,13 +65,13 @@ function gen_data_ghosal(; n = 100, σ = 0.1, plt = false)
     m4 = m40 + randn(n) * σ
     if plt
         ind = sortperm(xs)
-        p1 = plot(xs[ind], m10[ind], legend = false)
+        p1 = plot(xs[ind], m10[ind], legend = false, title = L"m_1")
         scatter!(p1, xs, m1)
-        p2 = plot(xs[ind], m20[ind], legend = false)
+        p2 = plot(xs[ind], m20[ind], legend = false, title = L"m_2")
         scatter!(p2, xs, m2)
-        p3 = plot(xs[ind], m30[ind], legend = false)
+        p3 = plot(xs[ind], m30[ind], legend = false, title = L"m_3")
         scatter!(p3, xs, m3)
-        p4 = plot(xs[ind], m40[ind], legend = false)
+        p4 = plot(xs[ind], m40[ind], legend = false, title = L"m_4")
         scatter!(p4, xs, m4)
         return [p1, p2, p3, p4]
     else
@@ -553,52 +553,4 @@ function mono_test(x::AbstractVector{T}, y::AbstractVector{T}) where T <: Real
     pval = 1 - cdf(Chisq(res.workspace.J), tobs)
     # println("pval = $pval, tobs = $tobs, critical = $(quantile(Chisq(J), 0.95))")
     return pval < 0.05
-end
-
-# summary experiment results
-function summary_mono_test(resfile::String, task = "typeI_error")
-    texname = resfile[1:end-4] * ".tex"
-    res0 = deserialize(resfile)
-    res = [x .< 0.05 for x in res0]
-    methods = ["Meyer", "Ghosal", "Bowman",
-            #    "MD (CS) sup", "MD (CS) min", "MD (CS) 1se", 
-                "MDCS",
-                "MDSS"
-            #    "MD (SS) sup", "MD (SS) min", "MD (SS) 1se"
-               ]
-    nmethod = length(methods)
-    μ = mean(res)
-    @assert size(μ, 4) == nmethod
-    A = Array{Matrix, 1}(undef, nmethod)
-    name_σs = ["\$\\sigma = 0.001\$", "\$\\sigma = 0.01\$", "\$\\sigma = 0.1\$"]
-    if task == "typeI_error"
-        name_curves = ["\$x\$", "\$x^3\$", "\$x^{1/3}\$", "\$e^x\$", "\$1/(1+e^{-x})\$"]
-    elseif task == "bowman"
-        name_curves = "a = " .* string.([0,0.15,0.25,0.45])
-    elseif task == "ghosal"
-        name_curves = "m" .* string.(1:4)
-    end
-    for i in 1:nmethod
-        if task == "bowman"
-            A[i] = hcat([μ[:, :, j, i] for j = 1:3]...)
-        else
-            A[i] = hcat([μ[:, j, :, i]' for j = 1:3]...)
-        end
-    end
-    print2tex(A, methods, name_σs, 
-                    subcolnames=["n = 50", "100", "200"], 
-                    subrownames = name_curves, 
-                    colnames_of_rownames = ["Methods", "Curves"], 
-                    file = texname, format="raw")
-    if task == "typeI_error"
-        mkpath(resfile[1:end-4])
-        for i = 1:3
-            for j = 1:3
-                for k = 1:5
-                    plot([histogram([x[i, j, k, ℓ] for x in res0], xlims = (0, 1.1), bins = 0:0.05:1.1, normalize = :probability, legend = false, title = methods[ℓ], margin=5Plots.mm) for ℓ = 1:5]..., layout = (1, 5), size = (2000, 400))
-                    savefig(joinpath(resfile[1:end-4], "pval_$i$j$k.pdf"))
-                end
-            end
-        end
-    end
 end

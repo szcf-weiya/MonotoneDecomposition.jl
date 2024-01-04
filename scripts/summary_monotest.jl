@@ -157,3 +157,77 @@ function summary_res4x3_3()
     res2 = deserialize("../res/mono_test/res_mono_test_ghosal.sil")
     μ2 = mean(res2) # 3x4x5
 end
+
+# summary experiment results
+function summary_mono_test(resfile::String, task = "typeI_error")
+    texname = resfile[1:end-4] * ".tex"
+    res0 = deserialize(resfile)
+    res = [x .< 0.05 for x in res0]
+    methods_fullname = ["\\textcite{wangTestingMonotonicityConvexity2011}",
+                        "\\textcite{ghosalTestingMonotonicityRegression2000}",
+                        "\\textcite{bowmanTestingMonotonicityRegression1998}",
+                        "MDCS",
+                        "MDSS"]
+    methods = ["Wang and Meyer (2011)", "Ghosal et al. (2000)", "Bowman et al. (2000)",
+                "MDCS",
+                "MDSS"
+               ]
+    nmethod = length(methods)
+    μ = mean(res)
+    @assert size(μ, 4) == nmethod
+    A = Array{Matrix, 1}(undef, nmethod)
+    name_σs = ["\$\\sigma = 0.001\$", "\$\\sigma = 0.01\$", "\$\\sigma = 0.1\$"]
+    if task == "typeI_error"
+        name_curves = ["\$x\$", "\$x^3\$", "\$x^{1/3}\$", "\$e^x\$", "\$1/(1+e^{-x})\$"]
+    elseif task == "bowman"
+        name_curves = "a = " .* string.([0,0.15,0.25,0.45])
+    elseif task == "ghosal"
+        name_curves = "m" .* string.(1:4)
+    end
+    for i in 1:nmethod
+        if task == "bowman"
+            A[i] = hcat([μ[:, :, j, i] for j = 1:3]...)
+        else
+            A[i] = hcat([μ[:, j, :, i]' for j = 1:3]...)
+        end
+    end
+    print2tex(A, methods_fullname, name_σs, 
+                    subcolnames=["n = 50", "100", "200"], 
+                    subrownames = name_curves, 
+                    colnames_of_rownames = ["Methods", "Curves"], 
+                    file = texname, format="raw")
+    # if task == "typeI_error"
+    #     mkpath(resfile[1:end-4])
+    #     for i = 1:3
+    #         for j = 1:3
+    #             for k = 1:5
+    #                 plot([histogram([x[i, j, k, ℓ] for x in res0], xlims = (0, 1.1), bins = 0:0.05:1.1, normalize = :probability, legend = false, title = methods[ℓ], margin=5Plots.mm) for ℓ = 1:5]..., layout = (1, 5), size = (2000, 400))
+    #                 savefig(joinpath(resfile[1:end-4], "pval_$i$j$k.pdf"))
+    #             end
+    #         end
+    #     end
+    # end
+end
+
+function qqplot_mono_test(resfile::String)
+    res0 = deserialize(resfile)
+    for i = 1:3
+        for j = 1:3
+            for k = 1:5
+                fig = plot(xlab = "Uniform[0, 1] Quantiles", ylab = "Sample Quantiles", xlim = (0, 1), ylim = (0, 1))
+                ms = [:star5, :x, :+, :circle, :rect]
+                u = rand(Uniform(), 100)
+                methods = ["Wang and Meyer (2011)", "Ghosal et al. (2000)", "Bowman et al. (2000)", "MDCS", "MDSS"]
+                qu = quantile(u, 0:0.01:1.0)
+                for ℓ = 1:5
+                    a = [x[i, j, k, ℓ] for x in res0]
+                    # qqplot!(fig, u, a, markershape = ms[ℓ], label = methods[ℓ])
+                    qa = quantile(a, 0:0.01:1.0)
+                    plot!(fig, qu, qa, markershape = ms[ℓ], label = methods[ℓ])
+                end
+                Plots.abline!(fig, 1, 0, label = "", ls = :dash)
+                savefig(joinpath(resfile[1:end-4], "qqplot_$i$j$k.pdf"))
+            end
+        end
+    end
+end
