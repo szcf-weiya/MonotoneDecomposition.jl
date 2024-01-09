@@ -1,6 +1,7 @@
 using LaTeXStrings
 using Serialization
 using LaTeXTables
+using StatsBase
 
 function summary_res()
     res = deserialize("../res/mono_test/res_mono_test_bowman.sil")
@@ -161,6 +162,11 @@ end
 # summary experiment results
 function summary_mono_test(resfile::String, task = "typeI_error")
     texname = resfile[1:end-4] * ".tex"
+    if occursin("ghosal", resfile)
+        task = "ghosal"
+    elseif occursin("bowman", resfile)
+        task = "bowman"
+    end
     res0 = deserialize(resfile)
     res = [x .< 0.05 for x in res0]
     methods_fullname = ["\\textcite{wangTestingMonotonicityConvexity2011}",
