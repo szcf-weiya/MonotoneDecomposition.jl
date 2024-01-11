@@ -53,37 +53,6 @@ end
 #     return sum(m.w * sigmoid.(m.α + m.β * x))
 # end
 
-function gen_data_GP(n::Int, m::Int; ℓ = 1, n0 = 5, prediction = false, σ = 0.0)
-    # x = rand(n) * 2 .- 1
-    x0 = rand(n0) * 2 .- 1
-    K0 = gen_kern(x0)
-    f = rand(MvNormal(K0)) 
-    x = range(-1, 1, length = n)
-    K1 = gen_kern(x)
-    K01 = gen_kern(x0, x)
-    if !prediction
-        # if without prediction, return here
-        # return x0, f
-        return x, rand(MvNormal(K1 + sqrt(eps()) * 1.0I ), m)
-    else
-        # by prediction
-        iK0 = inv(K0 + σ^2 * 1.0I)
-        μ = K01' * iK0 * f
-        Σ = K1 - K01' * iK0 * K01
-        println(eigen(Σ).values)
-        # dist = MvNormal(K)
-        dist = MvNormal(μ, Symmetric(Σ))
-        return x0, f, x, rand(dist, m)
-    end
-end
-
-# Square Exponential
-function sq_exp(x::AbstractVector{T}; ℓ = 1) where T <: AbstractFloat
-    K = gen_kern(x, ℓ)
-    ϵ = sqrt(eps())
-    return rand(MvNormal(K + ϵ * 1.0I))
-end
-
 """
     gp(x; K)
 

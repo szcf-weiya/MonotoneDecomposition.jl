@@ -6,7 +6,11 @@ using LaTeXStrings
 
 using RCall
 
+"""
+    gen_data_bowman()
 
+Generate Curves for Monotonicity Test used in Bowman et al. (1998)
+"""
 function gen_data_bowman(;n = 50, a = 0, σ = 0.1, plt = false, kw...)
     xs = range(0, 1, length = n)
     f(x, a) = 1 + x - a * exp(-1/2 * (x-0.5)^2 / 0.1^2)
@@ -20,6 +24,11 @@ function gen_data_bowman(;n = 50, a = 0, σ = 0.1, plt = false, kw...)
     end
 end
 
+"""
+    demo_data()
+
+Generate demo data for illustration. (Figure 6 in the paper)
+"""
 function demo_data(; figfolder = "/tmp" # "../notes"
                    )
     figs = Plots.Plot[]
@@ -34,6 +43,11 @@ function demo_data(; figfolder = "/tmp" # "../notes"
     savefig(joinpath(figfolder, "ex-ghosal.pdf"))
 end
 
+"""
+    gen_mono_data()
+
+Generate monotonic curves, used for checking type I error under H0. (Table 4 and Figure 5 in the paper)
+"""
 function gen_mono_data(; n = 100, σ = 0.1, equidistant = false)
     if equidistant
         x = range(0, 1, length = n)
@@ -48,11 +62,11 @@ function gen_mono_data(; n = 100, σ = 0.1, equidistant = false)
     return x, m1, m2, m3, m4, m5
 end
 
-function gen_desc_data(; n = 100, σ = 0.1)
-    x, m1, m2, m3, m4, m5 = gen_mono_data(; n = n, σ = σ)
-    return x, -m1, -m2, -m3, -m4, -m5
-end
+"""
+    gen_data_ghosal()
 
+Generate curves used in Ghosal et al. (2000).
+"""
 function gen_data_ghosal(; n = 100, σ = 0.1, plt = false)
     xs = rand(n)
     m10 = zeros(n)
@@ -315,54 +329,6 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
     return pval, D
 end
 
-function mono_test_bootstrap_sup(x::AbstractVector{T}, y::AbstractVector{T}; 
-                                                            nrep = 100, nμ = 10, 
-                                                            nfold = 2, fixJ = true, 
-                                                            nblock = 10,
-                                                            kw...) where T <: AbstractFloat
-    n = length(y)
-    μs0 = 10.0 .^ (-6:0.5:6)
-    D1, μ0 = cv_mono_decomp_cs(x, y, ss = μs0, one_se_rule = true, fixJ = fixJ, nfold = nfold)
-    μ1 = D1.μ
-    J = D1.workspace.J
-    # μ0 < μ1
-    if μ1 == μ0
-        μ1 = maximum(μs0)
-        μ0 = minimum(μs0)
-    end
-    # μ0 is without 1se rule
-    μl = μ0 - 0.75 * (μ1 - μ0)
-    if μl < 0
-        μl = μ0 * 0.25
-    end
-    μr = μ1 #μ1 + 0.75 * (μ1 - μ0)
-    μs = vcat(range(μl, μr, length = nμ), μ1, μ0)
-    # μs = range(μ0, μ1, length = nμ)
-    pval = Float64[]
-    for (k, μ) in enumerate(μs)
-        D = mono_decomp_cs(x, y, s = μ, s_is_μ = true, J = J)
-        error = y - D.yhat
-        tobs = var(D.γdown) #/ var(y - D.yhat)
-        ts = zeros(nrep)
-        c = mean(D.yhat) / 2
-        for i = 1:nrep
-            yi = construct_bootstrap_y(y, error, D.workspace.B, D.γup, c, nblock = nblock)
-            Di = mono_decomp_cs(x, yi, s = μ, s_is_μ = true, J = J)
-            # ts[i] = var(Di.γdown) / var(y - Di.yhat)
-            ts[i] = var(Di.γdown) 
-        end
-        # pval[k] = sum(ts .> tobs) / nrep
-        append!(pval, sum(ts .> tobs) / nrep)
-    end
-    # return pval
-    # must include one
-    # if length(pval) == 0
-    #     @warn "$ρ is too small, and no mono decomp satisfies the condition"
-    # end
-    @debug "pval = $pval"
-    return [maximum(pval) < 0.05, pval[end] < 0.05, pval[end-1] < 0.05]
-end
-
 maxgap(x::AbstractVector{T}) where T <: Real = maximum(x) - minimum(x)
 
 ## aim for hete error, but if we can change different md decomposition method such that the md is homo, then no need (paper#12). 
@@ -416,93 +382,6 @@ function construct_bootstrap_y(y::AbstractVector{T}, e::AbstractVector{T}, B::Ab
     return construct_bootstrap_y(y, e, B * γ .+ c, nblock = nblock, σe = σe, debias_mean_yi = debias_mean_yi)
 end
 
-function mono_test_bootstrap_supss(x::AbstractVector{T}, y::AbstractVector{T}; 
-                                    nrep = 100, nμ = 10, nfold = 2, seed = rand(UInt64),
-                                    opstat::Union{String, Function} = var,
-                                    md_method = "single_lambda",
-                                    tol = 1e-4,
-                                    nblock = -1,
-                                    use_σ_from_ss = false,
-                                    debias_mean_yi = true,
-                                    kw...
-                                    ) where T <: Real
-    # for block index
-    idx = sortperm(x)
-    x = x[idx]
-    y = y[idx]
-    n = length(y)
-    res, μ0, μs0, errs, σerrs, yhat, yhatnew = cv_mono_decomp_ss(x, y; one_se_rule = true, nfold = nfold, seed = seed, method = md_method, tol = tol, kw...)
-    σe0 = std(y - yhat)
-    μ1 = res.μ
-    # μ0 < μ1
-    # μ0 is not with 1se rule
-    if μ1 == μ0
-        μ1 = maximum(μs0)
-        μ0 = minimum(μs0)
-    end
-    μl = μ0 - 0.75 * (μ1 - μ0)
-    if μl < 0
-        # μl = μ0 * 0.25
-        μl = min(cbrt(eps()), 0.25μ0)
-    end
-    μr = μ1#μ1 + 0.75 * (μ1 - μ0)
-    μs = vcat(range(μl, μr, length = nμ), μ1, μ0)
-    @debug "perform monotone test: μ_min = $μ0, μ_1se = $μ1"
-    @debug "construct composite hypothesis in the range [$μl, $μr]"
-    # μs = range(μ0, μ1, length = nμ)
-    pval = Float64[]
-    for (k, μ) in enumerate(μs)
-        D = mono_decomp_ss(res.workspace, x, y, res.λ, μ)
-        error = y - D.yhat
-        σe = std(error)
-        ts = zeros(nrep)
-        c = mean(D.yhat) / 2
-        if isa(opstat, Function)
-            tobs = opstat(D.γdown)
-        else
-            tobs = sum((D.γdown .- c).^2)
-        end
-        @debug "σe = $σe"
-        for i = 1:nrep
-            yi = construct_bootstrap_y(y, error, D.workspace.B, D.γup, c, nblock = nblock, 
-                                        σe = ifelse(use_σ_from_ss, σe0, σe),
-                                        debias_mean_yi = debias_mean_yi)
-            try
-                Di = mono_decomp_ss(res.workspace, x, yi, res.λ, μ, strict = true)                
-                if isa(opstat, Function)
-                    ts[i] = opstat(Di.γdown)
-                else
-                    ts[i] = sum((Di.γdown .- c).^2)
-                end
-            catch
-                @warn "due to error in optimization, assign test statistic as Inf"
-                # TODO: is Inf reasonable?
-                # alternatively, exclude Inf when calculting p-value
-                ts[i] = Inf
-            end
-            # ts[i] = var(Di.γdown) / var(y - Di.yhat)
-            # savefig(scatter(x, yi), "/tmp/toy-$i.png")
-            # ts[i] = sum((Di.γdown .- c).^2)
-        end
-        # if k == 2
-        #     fig = histogram(ts[.!isinf.(ts)])
-        #     vline!(fig, [tobs])
-        #     savefig(fig, "/tmp/mu.png")
-        # end
-        # println(ts)
-        # println(tobs)
-        # pval[k] = sum(ts .> tobs) / nrep
-        append!(pval, sum(ts .> tobs) / nrep)
-    end
-    # return pval
-    # must include one
-    # if length(pval) == 0
-    #     @warn "$ρ is too small, and no mono decomp satisfies the condition"
-    # end
-    @debug "pval = $pval"
-    return [maximum(pval) < 0.05, pval[end] < 0.05, pval[end-1] < 0.05]
-end
-
 """
     mono_test_bootstrap_ss(x, y)
 
@@ -539,18 +418,4 @@ function mono_test_bootstrap_ss(x::AbstractVector{T}, y::AbstractVector{T}; nrep
     end
     pval = (sum(ts .> tobs) + sum(ts .== tobs) * 0.5) / nrep
     return pval, D
-end
-
-function mono_test(x::AbstractVector{T}, y::AbstractVector{T}) where T <: Real
-    # x, y = gen_data(a = 0.15, σ = 0.025)
-    res, _ = cv_mono_decomp_cs(x, y, Js = 4:20, ss = 10.0 .^ (-6:0.5:-1), fixJ = false)
-    # scatter(x, y)
-    # plot!(x, res.yhat)
-    c = mean(res.yhat) / 2
-    n = length(y)
-    σhat2 = var(y - res.yhat) / 4n
-    tobs = sum((res.γdown .- c).^2 / σhat2)
-    pval = 1 - cdf(Chisq(res.workspace.J), tobs)
-    # println("pval = $pval, tobs = $tobs, critical = $(quantile(Chisq(J), 0.95))")
-    return pval < 0.05
 end

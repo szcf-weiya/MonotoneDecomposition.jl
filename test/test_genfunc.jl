@@ -5,7 +5,7 @@ using GaussianProcesses
 using Statistics
 
 @testset "GP" begin
-    @testset "kernel function" begin
+    @testset "square exponential kernel function" begin
         x = randn(1, 3)
         K = cov(SEIso(0.0, 0.0), x)
         K2 = zeros(3, 3)

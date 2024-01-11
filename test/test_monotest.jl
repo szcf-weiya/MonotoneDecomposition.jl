@@ -27,6 +27,11 @@ end
     @test c[100] ≈ 3.05099 atol=1e-5
     @test c[200] ≈ 3.07254 atol=1e-5
     @test c[500] ≈ 3.10625 atol=1e-5
+    @testset "critical value vs pvalue" begin
+        x = randn(100) 
+        @test !MonotoneDecomposition.ghosal_S1n(x, x, c[100])
+        @test MonotoneDecomposition.ghosal_S1n(x, x) >= 0.05
+    end
 end
 
 @testset "experiments" begin
