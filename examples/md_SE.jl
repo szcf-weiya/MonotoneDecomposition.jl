@@ -12,10 +12,10 @@ x, y, x0, y0 = gen_data(100, 0.5, "SE_1")
 # ### `fixJ = true`
 
 # Pefrom Monotone Decomposition with Cubic B-splines, where the number of basis functions is chosen by cross-validation for cubic splines.
-ss = 10.0 .^ (-6:0.1:0)
-D, μmin, μs, errs, σerrs, yhat, yhatnew = 
-    cv_mono_decomp_cs(x, y, ss = ss, fixJ = true, x0 = x0);
-
+μs = 10.0 .^ (-6:0.1:0)
+D, μmin, errs, σerrs = 
+    cv_mono_decomp_cs(x, y, ss = μs, fixJ = true, x0 = x0);
+yhat, yhatnew = cubic_spline(D.workspace.J)(x, y, x0)
 # Plot it
 plot([x, y], [x0, y0], D, yhatnew, prefix_title = "SE (ℓ = 1, σ = 0.5): ")
 
@@ -25,13 +25,13 @@ cvplot(errs, σerrs, 1.0 * D.workspace.J:D.workspace.J, μs)
 # ### `fixJ = false`
 
 Js = 4:50
-D, μmin, μs, errs, σerrs = 
-    cv_mono_decomp_cs(x, y, ss = ss, fixJ = false, x0 = x0, Js = Js);
+D, μmin, errs, σerrs = 
+    cv_mono_decomp_cs(x, y, ss = μs, fixJ = false, x0 = x0, Js = Js);
 J, yhat, yhatnew = cv_cubic_spline(x, y, x0, Js = Js)
 plot([x, y], [x0, y0], D, yhatnew, prefix_title = "SE (ℓ = 1, σ = 0.5): ")
 
 # the heatmap of CV-error along the two parameter (J, μ) is as follows,
-cvplot(errs, σerrs, Js * 1.0, ss)
+cvplot(errs, σerrs, Js * 1.0, μs)
 
 # ## With Smoothing Splines
 

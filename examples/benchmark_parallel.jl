@@ -52,7 +52,7 @@ pmap(
         show_progress = f == "x^3" # keep one progressbar
     ),
     fs[idxf]
-)
+);
 
 # !!! tip "run from command line"
 #     ```

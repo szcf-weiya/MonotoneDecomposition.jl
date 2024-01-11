@@ -4,7 +4,7 @@ using Documenter, MonotoneDecomposition
 using Literate
 indir = joinpath(@__DIR__, "..", "examples")
 outdir = joinpath(@__DIR__, "src", "examples")
-for file in ["gp.jl", "md_SE.jl"]
+for file in ["gp.jl", "md_SE.jl", "benchmark.jl", "benchmark_parallel.jl"]
     Literate.markdown(joinpath(indir, file), outdir; credit = false)
 end
 # using Pkg
@@ -16,7 +16,13 @@ makedocs(sitename="MonotoneDecomposition.jl",
             "Examples" => [
                 "Gaussian Process" => "examples/gp.md",
                 "Monotone Decomposition" => "examples/md_SE.md",
+                "Benchmarking" => "examples/benchmark.md",
+                "Benchmarking in Parallel" => "examples/benchmark_parallel.md"
             ],
             "API" => "api.md"
         ]
+)
+
+deploydocs(
+    repo = "github.com/szcf-weiya/MonotoneDecomposition.jl"
 )
