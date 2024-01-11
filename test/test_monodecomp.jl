@@ -133,15 +133,6 @@ end
     # save_grid_plots(figs)
 end
 
-@testset "one standard rule in cross-validation" begin
-    μs = [3 2 1 2 3;
-          4 3 2 0.9 4;
-          2 1.2 1 0 2] * 1.0
-    σs = ones(3, 4) * 1.5
-    # an alternative might be directly take μ+σ, but it is hard to determine the simplest model when NOT smaller is simpler
-    @test MonotoneDecomposition.cv_one_se_rule(μs, σs) == (3, 2)
-end
-
 @testset "cross-validation for monotone decomposition with smoothing splines" begin
     f = x -> x^3
     n = 100
@@ -160,8 +151,23 @@ end
         @test all(D.γup[2:end] - D.γup[1:end-1] .>= 0)
     end 
 
+    @testset "divide search region" begin
+        D, _ = cvfit(x, y, 10.0, range(λopt/2, λopt*2, length = 3), nμ = 10, figname = nothing, ρ = 0.11)
+        @test all(D.γup[2:end] - D.γup[1:end-1] .>= 0)        
+    end
+
+    @testset "extend search region" begin
+        D, _ = cvfit(x, y, 0.01, range(λopt/2, λopt*2, length = 3), nμ = 10, figname = nothing, ρ = 0.11)
+        @test all(D.γup[2:end] - D.γup[1:end-1] .>= 0)
+    end
+
     @testset "fix μ, vary λ" begin
         D, _ = cvfit(x, y, 0.1, λopt, nλ = 10, figname = nothing)
+        @test all(D.γup[2:end] - D.γup[1:end-1] .>= 0)
+    end
+
+    @testset "extend search region" begin
+        D, _ = cvfit(x, y, 0.0, λopt*0.9, nλ = 10, figname = nothing, rλ = 0.1, ρ = 0.05)
         @test all(D.γup[2:end] - D.γup[1:end-1] .>= 0)
     end
 end

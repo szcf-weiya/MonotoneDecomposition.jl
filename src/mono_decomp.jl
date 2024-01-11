@@ -544,15 +544,13 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
     return D, μmin, μs, errs, σerrs, yhat, yhatnew, γss
 end
 
-function summary_res(σs = 0.2:0.2:1.0)
-    # combine cv plot
-    fignames = "/tmp/1-cv_optim_" .* string.(σs) .* ".png"
-    run(`convert $fignames +append /tmp/cv_optim.png`)
-    # combine curve fit plot
-    fignames = "/tmp/1-optim_sigma" .* string.(σs) .* ".png"
-    run(`convert $fignames +append /tmp/curve_optim.png`)
-end
+"""
+    benchmarking_cs(n, σ, f)
+    benchmarking_ss(n, σ, f)
+    benchmarking(f)
 
+Run benchmarking experiments on `n` observations sampled from curve `f` with noise `σ`.
+"""
 function benchmarking_cs(n::Int = 100, σ::Float64 = 0.5, f::Union{Function, String} = x->x^3; fixJ = true,
                                                                                figname_cv = nothing,
                                                                                figname_fit = nothing,
@@ -605,13 +603,6 @@ function benchmarking_ss(n::Int = 100, σ::Float64 = 0.5,
     return err
 end
 
-"""
-
-
-- `competitor`: 
-    if `nλ = 1`, then fixed λ; otherwise, there are two choices: ss_grid, ss_iter
-
-"""
 function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                             J = 10, 
                             μs = 10.0 .^ (-6:0.5:0), ## bspl
@@ -1288,96 +1279,6 @@ function build_model!(workspace::WorkSpaceCS, x::AbstractVector{T}; use_GI = fal
     end
 end
 
-"""
-    cv_one_se_rule(μs, σs)
-
-Return the index of parameter that minimize the CV error with one standard error rule.
-"""
-function cv_one_se_rule(μs::AbstractVector{T}, σs::AbstractVector{T}; small_is_simple = true) where T <: AbstractFloat
-    iopt = argmin(μs)
-    err_plus_se = μs[iopt] + σs[iopt]
-    if small_is_simple
-        ii = iopt-1:-1:1
-    else
-        ii = iopt+1:length(μs)
-    end
-    for i = ii
-        if μs[i] < err_plus_se
-            iopt = i
-        # else
-        #     break
-        end
-    end
-    return iopt
-end
-
-function cv_one_se_rule_deprecated(μs::AbstractMatrix{T}, σs::AbstractMatrix{T}; verbose = true, small_is_simple = [true, true]) where T <: AbstractFloat
-    ind = argmin(μs)
-    iopt, jopt = ind[1], ind[2]
-    # fix iopt, find the minimum jopt
-    # TODO: the order might make sense
-    jopt1 = cv_one_se_rule(μs[iopt,:], σs[iopt,:], small_is_simple = small_is_simple[2])
-    iopt1 = cv_one_se_rule(μs[:,jopt1], σs[:,jopt1], small_is_simple = small_is_simple[1])
-
-    iopt2 = cv_one_se_rule(μs[:,jopt], σs[:,jopt], small_is_simple = small_is_simple[1])
-    jopt2 = cv_one_se_rule(μs[iopt2,:], σs[iopt2,:], small_is_simple = small_is_simple[2])
-    
-    @debug "without 1se rule: iopt = $iopt, jopt = $jopt"
-
-    # determine the minimum one
-    if iopt1 + jopt1 < iopt2 + jopt2
-        if μs[iopt1, jopt1] < μs[iopt2, jopt2] + σs[iopt2, jopt2]
-            return iopt1, jopt1
-        else
-            return iopt2, jopt2
-        end
-    else
-        if μs[iopt2, jopt2] < μs[iopt1, jopt1] + σs[iopt1, jopt1]
-            return iopt2, jopt2
-        else
-            return iopt1, jopt1
-        end
-    end
-end
-
-function cv_one_se_rule(μs::AbstractMatrix{T}, σs::AbstractMatrix{T}; small_is_simple = [true, true]) where T <: AbstractFloat
-    ind = argmin(μs)
-    iopt, jopt = ind[1], ind[2]
-    jopt1 = cv_one_se_rule(μs[iopt,:], σs[iopt,:], small_is_simple = small_is_simple[2])
-
-    iopt1 = cv_one_se_rule(μs[:,jopt], σs[:,jopt], small_is_simple = small_is_simple[1])
-
-    @debug "without 1se rule: iopt = $iopt, jopt = $jopt"
-    # determine the minimum one: compare (iopt1, jopt) vs (iopt, jopt1), take the larger one since both are in 1se
-    if μs[iopt1, jopt] < μs[iopt, jopt1]
-        return iopt, jopt1
-    else
-        return iopt1, jopt
-    end
-end
-
-function cv_one_se_rule2(μs::AbstractMatrix{T}, σs::AbstractMatrix{T}; small_is_simple = [true, true]) where T <: AbstractFloat
-    ind = argmin(μs)
-    iopt, jopt = ind[1], ind[2]
-    err_plus_se = μs[iopt, jopt] + σs[iopt, jopt]
-    ii = ifelse(small_is_simple[1], iopt:-1:1, iopt:size(μs, 1))
-    jj = ifelse(small_is_simple[2], jopt:-1:1, jopt:size(μs, 2))
-    @debug ii
-    @debug jj
-    best_err = 0.0
-    for i = ii
-        for j = jj
-            if μs[i, j] < err_plus_se
-                if μs[i, j] > best_err # pick the one with largest error (different from univariate case, no a single direction to a simpler model)
-                    best_err = μs[i, j]
-                    iopt = i
-                    jopt = j
-                end
-            end
-        end
-    end
-    return iopt, jopt
-end
 
 """
     cvplot(sil::String)
@@ -1528,7 +1429,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μstar::Real, λstar:
     D, μerr = cvfit(x, y, [μstar], λs, nfold = nfold, figname = figname, seed = seed, prop_nknots = prop_nknots)
     last_min_μerr = minimum(μerr)
     lastD = deepcopy(D)
-    if abs(1 - D.λ / λstar) / (2rλ) < ρ
+    if abs(1 - D.λ / λstar) / rλ > 1 - ρ
         iter = 0
         while true 
             iter += 1
@@ -1538,14 +1439,14 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μstar::Real, λstar:
                 break
             end
             println("extend the search region of λ: searching [1-$rλ, 1+$rλ] * $λstar")
-            λs = range(1-rλ, 1+rλ, length = nλ + 1) * λstar
+            λs = range(max(0, 1-rλ), 1+rλ, length = nλ + 1) * λstar
             D, μerr = cvfit(x, y, [μstar], λs, nfold = nfold, figname = figname, seed = seed, prop_nknots = prop_nknots)
             min_μerr = minimum(μerr)
             if min_μerr > last_min_μerr
                 println("no better lambda after extension")
                 return lastD, last_min_μerr
             end
-            if (abs(1 - D.λ / λstar) / (2rλ) >= ρ) | (iter > maxiter)
+            if (abs(1 - D.λ / λstar) / rλ <= 1 - ρ) | (iter > maxiter)
                 break
             end
             last_min_μerr = min_μerr
@@ -1562,6 +1463,9 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μmax::Real, λ::Abst
     # μ = (1:nμ) ./ nμ * μmax
     D, μerr = cvfit(x, y, (1:nμ) ./ nμ .* μmax, λ, figname = figname, nfold = nfold, seed = seed, prop_nknots = prop_nknots)
     last_min_μerr = minimum(μerr)
+    if ρ < 1/nμ
+        @warn "the proportion to the boundary $ρ is better to be smaller than 1/nμ, otherwise the boundary solution is not detected"
+    end
     # if D.μ near the left boundary
     if D.μ / μmax < ρ
         iter = 0
