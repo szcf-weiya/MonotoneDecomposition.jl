@@ -153,11 +153,6 @@ Perform smoothing spline on `(x, y)`, and make predictions on `xnew`.
 Returns: `yhat`, `ynewhat`,....
 """
 function smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::AbstractVector{T}; keep_stuff = false, design_matrix = false, LOOCV = false) where T <: AbstractFloat
-    # if LOOCV
-    #     spl = R"smooth.spline($x, $y, keep.stuff = $keep_stuff, cv = TRUE)"
-    # else
-    #     spl = R"smooth.spline($x, $y, keep.stuff = $keep_stuff, cv = FALSE)"
-    # end
     spl = R"smooth.spline($x, $y, keep.stuff = $keep_stuff, cv = $LOOCV)"
     Σ = nothing
     if keep_stuff
@@ -182,8 +177,8 @@ function cv_smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, λs::Abstr
     for k in 1:nfold
         test_idx = folds[k]
         train_idx = setdiff(1:n, test_idx)
-        for (i, λ) in enumerate(λs)
-            spl = R"smooth.spline($(x[train_idx]), $(y[train_idx]), lambda = $λ)"
+        for (i, lam) in enumerate(λs)
+            spl = R"smooth.spline($(x[train_idx]), $(y[train_idx]), lambda = $lam)"
             yhat = rcopy(R"predict($spl, $(x[test_idx]))$y")
             # for LOOCV, yhat is a scalar, while y[test_idx] is a vector, use `.-` can help
             errs[k, i] = norm(yhat .- y[test_idx])^2 / length(test_idx) 
@@ -201,11 +196,11 @@ function cv_smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, λs::Abstr
     elseif ind == 1
         @warn "the optimal is on the left boundary of λs"
     end
-    λopt = λs[ind]
+    optlam = λs[ind]
     if !isnothing(figname)
         savefig(cvplot(μerr, σerr, λs, nfold = nfold, ind0 = ind, lbl = "λ"), figname)
     end
-    spl = R"smooth.spline($x, $y, lambda = $λopt, keep.stuff = TRUE)"
+    spl = R"smooth.spline($x, $y, lambda = $optlam, keep.stuff = TRUE)"
     Σ = recover(rcopy(R"$spl$auxM$Sigma"))
     knots = rcopy(R"$spl$fit$knot")[4:end-3]
     bbasis = R"fda::create.bspline.basis(breaks = $knots, norder = 4)"
