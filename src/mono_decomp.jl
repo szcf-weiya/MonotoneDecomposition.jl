@@ -545,11 +545,19 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
 end
 
 """
-    benchmarking_cs(n, σ, f)
-    benchmarking_ss(n, σ, f)
-    benchmarking(f)
+    benchmarking_cs(n, σ, f; figname_cv = nothing, figname_fit = nothing)
 
-Run benchmarking experiments on `n` observations sampled from curve `f` with noise `σ`.
+Run benchmarking experiments for decomposition with cubic splines on `n` observations sampled from curve `f` with noise `σ`.
+
+## Optional Arguments
+
+- `figname_cv`: if not `nothing`, the cross-validation error will be plotted and saved to the given path.
+- `figname_fit`: if not `nothing`, the fitted curves will be plotted and saved to the given path.
+- `Js`: the candidates of number of basis functions.
+- `fixJ`: whether to use the CV-tuned `J` from the crossponding cubic spline fitting.
+- `nfold`: the number of folds in cross-validation procedure
+- `one_se_rule`: whether to use the one-standard-error rule to select the parameter after cross-validation procedure
+- `μs`: the candidates of tuning parameters for the discrepancy parameter
 """
 function benchmarking_cs(n::Int = 100, σ::Float64 = 0.5, f::Union{Function, String} = x->x^3; fixJ = true,
                                                                                figname_cv = nothing,
@@ -577,6 +585,11 @@ function benchmarking_cs(n::Int = 100, σ::Float64 = 0.5, f::Union{Function, Str
     return err
 end
 
+"""
+    benchmarking_ss(n, σ, f)
+
+Run benchmarking experiments for decomposition with smoothing splines on `n` observations sampled from curve `f` with noise `σ`.
+"""
 function benchmarking_ss(n::Int = 100, σ::Float64 = 0.5, 
                             f::Union{Function, String} = x->x^3; 
                                 nfold = 5, one_se_rule = true,
@@ -603,6 +616,14 @@ function benchmarking_ss(n::Int = 100, σ::Float64 = 0.5,
     return err
 end
 
+"""
+    benchmarking(f::String)
+
+Run benchmarking experiments for monotone decomposition on curve `f`. The candidates of `f` include:
+
+- simple functions: `x^2`, `x^3`, `exp(x)`, `sigmoid`
+- random functions generated from Gaussian Process: "SE_1" "SE_0.1" "Mat12_1" "Mat12_0.1" "Mat32_1" "Mat32_0.1" "RQ_0.1_0.5" "Periodic_0.1_4"
+"""
 function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                             J = 10, 
                             μs = 10.0 .^ (-6:0.5:0), ## bspl

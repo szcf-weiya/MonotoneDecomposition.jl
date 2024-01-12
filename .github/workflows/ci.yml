@@ -30,14 +30,10 @@ jobs:
         r["CRAN"] = "https://cloud.r-project.org/"
         options(repos=r)
         options(download.file.method = "wget")
-        install.packages("remotes")
         install.packages("RCurl", INSTALL_opts = "--no-test-load") # required by fda
         install.packages("fda")
         install.packages("lsei")
-        install.packages("Iso")
-        install.packages("cobs")
         install.packages("splines")
-        install.packages("monmlp")
       shell: Rscript {0}
       env:
         MAKEFLAGS: LDFLAGS=-Wl,-rpath,/opt/hostedtoolcache/julia/${{ matrix.julia-version }}/x64/bin/../lib/julia/\ -L/opt/hostedtoolcache/julia/${{ matrix.julia-version }}/x64/bin/../lib/julia/
@@ -87,14 +83,10 @@ jobs:
           r["CRAN"] = "https://cloud.r-project.org/"
           options(repos=r)
           options(download.file.method = "wget")
-          install.packages("remotes")
           install.packages("RCurl", INSTALL_opts = "--no-test-load") # required by fda
           install.packages("fda")
           install.packages("lsei")
-          install.packages("Iso")
-          install.packages("cobs")
           install.packages("splines")
-          install.packages("monmlp")
         shell: Rscript {0}
         env:
           MAKEFLAGS: LDFLAGS=-Wl,-rpath,/opt/hostedtoolcache/julia/${{ matrix.julia-version }}/x64/bin/../lib/julia/\ -L/opt/hostedtoolcache/julia/${{ matrix.julia-version }}/x64/bin/../lib/julia/
@@ -105,5 +97,5 @@ jobs:
         env:
           LD_LIBRARY_PATH: /opt/R/${{ matrix.r-version }}/lib/R/lib
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # If authenticating with GitHub Actions token
-          # DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # If authenticating with SSH deploy key
+          DOCUMENTER_KEY: ${{ secrets.DOCUMENTER_KEY }} # If authenticating with SSH deploy key
   
