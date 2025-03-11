@@ -617,7 +617,7 @@ end
 Run benchmarking experiments for monotone decomposition on curve `f`. The candidates of `f` include:
 
 - simple functions: `x^2`, `x^3`, `exp(x)`, `sigmoid`
-- random functions generated from Gaussian Process: "SE_1" "SE_0.1" "Mat12_1" "Mat12_0.1" "Mat32_1" "Mat32_0.1" "RQ_0.1_0.5" "Periodic_0.1_4"
+- random functions generated from Gaussian Process: `SE_1` `SE_0.1` `Mat12_1` `Mat12_0.1` `Mat32_1` Mat32_0.1` `RQ_0.1_0.5` `Periodic_0.1_4`
 """
 function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                             J = 10, 

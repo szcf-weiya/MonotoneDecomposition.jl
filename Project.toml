@@ -1,7 +1,7 @@
 name = "MonotoneDecomposition"
 uuid = "985e57c0-c0fb-4ac0-a7f6-0eae5cf96536"
 authors = ["szcf-weiya <szcfweiya@gmail.com>"]
-version = "0.1.0"
+version = "0.1.1"
 
 [deps]
 DelimitedFiles = "8bb1440f-4735-579b-a4ab-409b98df4dab"
