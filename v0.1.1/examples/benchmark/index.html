@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Benchmarking · MonotoneDecomposition.jl</title><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="MonotoneDecomposition.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">MonotoneDecomposition.jl</a></span></div><form class="docs-search" action="../../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Examples</span><ul><li><a class="tocitem" href="../gp/">Gaussian Process</a></li><li><a class="tocitem" href="../md_SE/">Monotone Decomposition</a></li><li class="is-active"><a class="tocitem" href>Benchmarking</a></li><li><a class="tocitem" href="../benchmark_parallel/">Benchmarking in Parallel</a></li></ul></li><li><a class="tocitem" href="../../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Examples</a></li><li class="is-active"><a href>Benchmarking</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Benchmarking</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/szcf-weiya/MonotoneDecomposition.jl/blob/master/examples/benchmark.jl" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><p>Benchmarking</p><pre><code class="language-julia hljs">using MonotoneDecomposition</code></pre><p>Candidate functions</p><pre><code class="language-julia hljs">fs = [&quot;x^2&quot; &quot;x^3&quot; &quot;exp(x)&quot; &quot;sigmoid&quot; &quot;SE_1&quot; &quot;SE_0.1&quot; &quot;Mat12_1&quot; &quot;Mat12_0.1&quot; &quot;Mat32_1&quot; &quot;Mat32_0.1&quot; &quot;RQ_0.1_0.5&quot; &quot;Periodic_0.1_4&quot;]
+
+nrep = 1
+nλ = 2
+nfold = 2
+f = fs[1]
+competitor = &quot;ss_single_lambda&quot;
+nλ = ifelse(occursin(&quot;single_lambda&quot;, competitor), 1, nλ)
+one_se_rule = false
+resfolder0 = &quot;/tmp&quot;
+timestamp = replace(strip(read(`date -Iseconds`, String)), &quot;:&quot; =&gt; &quot;_&quot;)
+if length(ARGS) &gt; 0
+    @info &quot;Use args passed from CLI&quot;
+    competitor = ARGS[1]
+    resfolder0 = ARGS[2]
+    if !isdir(resfolder0)
+        mkdir(resfolder0)
+    end
+    nλ = parse(Int, ARGS[3])
+    nrep = parse(Int, ARGS[4])
+    nfold = parse(Int, ARGS[5])
+    one_se_rule = parse(Bool, ARGS[6])
+    f = ARGS[7]
+    if length(ARGS) &gt; 7
+        timestamp = replace(strip(ARGS[8]), &quot;:&quot; =&gt; &quot;_&quot;) # passed from scripts
+    end
+end
+resfolder = joinpath(resfolder0, &quot;nrep$nrep-nfold$nfold-nlam$nλ-1se$(one_se_rule)-$competitor-$timestamp&quot;)
+if !isdir(resfolder)
+    mkdir(resfolder)
+end
+@info &quot;Results are saved into $resfolder&quot;
+
+benchmarking(
+    f;
+    σs = [0.1, 0.2, 0.4, 0.5, 1.0, 1.5, 2.0], # noise level to be surveyed
+    jplot = false, # μerr vs σs
+    nrep = nrep, # NB: for fast auto-generation procedure, only use nrep = 1; in the paper, use nrep = 100
+    competitor = competitor,
+    nfold = nfold, # number of folds
+    one_se_rule = one_se_rule,
+    nλ = nλ, # the number of λ to be searched
+    rλ = 0.5, # the search region of λ, (1-rλ, 1+rλ)*λ
+    resfolder = resfolder,
+    verbose = false,
+    show_progress = true
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">[ Info: Results are saved into /tmp/nrep1-nfold2-nlam1-1sefalse-ss_single_lambda-2025-03-11T22_43_02+00_00
+[ Info: Benchmarking x^2 with 1 repetitions
+x^2 (nrep = 1), iter = 1:  29%|███████▏                 |  ETA: 0:01:45x^2 (nrep = 1), iter = 1:  43%|██████████▊              |  ETA: 0:01:05x^2 (nrep = 1), iter = 1:  57%|██████████████▎          |  ETA: 0:00:42x^2 (nrep = 1), iter = 1:  71%|█████████████████▉       |  ETA: 0:00:25x^2 (nrep = 1), iter = 1:  86%|█████████████████████▍   |  ETA: 0:00:13x^2 (nrep = 1), iter = 1: 100%|█████████████████████████| Time: 0:01:36</code></pre><div class="admonition is-success"><header class="admonition-header">run from command line</header><div class="admonition-body"><pre><code class="nohighlight hljs">julia examples/benchmark.jl ss_single_lambda /tmp 2 1 2 false</code></pre><p>You can also enable the debug mode to print more internal steps as follows</p><pre><code class="nohighlight hljs">JULIA_DEBUG=MonotoneDecomposition julia examples/benchmark.jl ss_single_lambda /tmp 2 1 2 false</code></pre></div></div><div class="admonition is-success"><header class="admonition-header">summary results</header><div class="admonition-body"><p>After obtaining results, we can obtain the summarized tex file (used in the manuscript) as follows.</p><pre><code class="language-julia hljs">MonotoneDecomposition.summary(resfolder = resfolder)</code></pre></div></div></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../md_SE/">« Monotone Decomposition</a><a class="docs-footer-nextpage" href="../benchmark_parallel/">Benchmarking in Parallel »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Tuesday 11 March 2025 22:49">Tuesday 11 March 2025</span>. Using Julia version 1.8.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
