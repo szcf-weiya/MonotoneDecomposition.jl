@@ -3,3 +3,5 @@ build
 docs/src/examples
 res
 res2
+scripts/*.log
+docs/*.sil

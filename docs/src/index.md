@@ -8,5 +8,5 @@ CurrentModule = MonotoneDecomposition
 
 Check the following paper for more details.
 
-> Lijun Wang, Xiaodan Fan, Hongyu Zhao, and Jun S. Liu. "Decomposition with Monotone B-splines: Fitting and Testing"
+> Lijun Wang, Xiaodan Fan, Hongyu Zhao, and Jun S. Liu. “Decomposition with Monotone B-Splines: Fitting and Testing.” arXiv, January 12, 2024. <http://arxiv.org/abs/2401.06383.>
 >

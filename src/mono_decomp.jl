@@ -285,6 +285,8 @@ function cv_cubic_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abstr
     Jopt = Js[ind]
     @debug "one_se_rule = $one_se_rule: Jopt = $Jopt"
     if !isnothing(figname)
+        silname = figname[1:end-4] * "_J.sil"
+        serialize(silname, [μerr, σerr, Js, nfold, ind])
         savefig(cvplot(μerr, σerr, 1.0 .* Js, nfold = nfold, ind0 = ind, lbl = "J"), figname)
     end
     yhat, yhatnew = cubic_spline(Jopt)(x, y, xnew)
@@ -299,8 +301,16 @@ Cross-validation for Monotone Decomposition with Cubic B-splines. Parameters `J`
 
 - if `fixJ == true`, then `J` is CV-tuned by the corresponding cubic B-spline fitting
 - if `fixJ == false`, then both `J` and `s` would be tuned by cross-validation.
+
+# Arguments
+
+- `figname`: if not `nothing`, then the CV erro figure will be saved to the given name (can include the path)
 """
-function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}, xnew::AbstractVector{T}; nfold = 10, Js = 4:50, ss = 10.0 .^ (-6:0.1:-1), s_is_μ = true, figname = nothing, one_se_rule = false, use_GI = false) where T <: AbstractFloat
+function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}, xnew::AbstractVector{T}; 
+                                nfold = 10, Js = 4:50, 
+                                ss = 10.0 .^ (-6:0.1:-1), 
+                                s_is_μ = true, figname = nothing, 
+                                one_se_rule = false, use_GI = false) where T <: AbstractFloat
     n = length(x)
     folds = div_into_folds(n, K = nfold, seed = rand(UInt64))
     errs = zeros(nfold, length(Js), length(ss))
@@ -354,7 +364,7 @@ Cross-validation for monotone decomposition with cubic B-splines when the fixed 
 function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}; ss = 10.0 .^ (-6:0.1:-1), 
                                                             figname = nothing, 
                                                             nfold = 10, 
-                                                            nfold_pre = length(x),
+                                                            nfold_pre = 10,
                                                             fixJ = true,
                                                             x0 = x,
                                                             Js = 4:50,
@@ -384,7 +394,7 @@ end
 """
     cv_mono_decomp_ss(x::AbstractVector, y::AbstractVector)
 
-Cross Validation for Monotone Decomposition with Smoothing Splines. with `λ` tuned by smoothing spline, and then perform golden search for `μ`.
+Cross Validation for Monotone Decomposition with Smoothing Splines. With `λ` tuned by smoothing spline, and then perform golden search for `μ`.
 
 # Returns
 
@@ -581,9 +591,18 @@ function benchmarking_cs(n::Int = 100, σ::Float64 = 0.5, f::Union{Function, Str
 end
 
 """
-    benchmarking_ss(n, σ, f)
+    benchmarking_ss(n::Int, σ::Float64, f::Union{Function, String}; 
+                        method = "single_lambda")
 
 Run benchmarking experiments for decomposition with smoothing splines on `n` observations sampled from curve `f` with noise `σ`.
+
+# Arguments
+
+- `method::String = "single_lambda"`: strategy for decomposition with smoothing spline. Possible choices:
+    - `single-lambda`
+    - `fix_ratio`
+    - `grid_search`
+    - `iter_search`
 """
 function benchmarking_ss(n::Int = 100, σ::Float64 = 0.5, 
                             f::Union{Function, String} = x->x^3; 
@@ -612,12 +631,25 @@ function benchmarking_ss(n::Int = 100, σ::Float64 = 0.5,
 end
 
 """
-    benchmarking(f::String)
+    benchmarking(f::String; n = 100, 
+                            σs = 0.2:0.2:1,
+                            competitor = "ss_single_lambda")
 
 Run benchmarking experiments for monotone decomposition on curve `f`. The candidates of `f` include:
 
 - simple functions: `x^2`, `x^3`, `exp(x)`, `sigmoid`
-- random functions generated from Gaussian Process: `SE_1` `SE_0.1` `Mat12_1` `Mat12_0.1` `Mat32_1` Mat32_0.1` `RQ_0.1_0.5` `Periodic_0.1_4`
+- random functions generated from Gaussian Process: `SE_1` `SE_0.1` `Mat12_1` `Mat12_0.1` `Mat32_1` `Mat32_0.1` `RQ_0.1_0.5` `Periodic_0.1_4`
+
+# Arguments
+
+- `n::Integer = 100`: sample size for the simulated curve
+- `σs::AbstractVector`: a vector of noise level to be investigated
+- `competitor::String`: a string to indicate the strategy used in monotone decomposition. Possible choices:
+    - `ss_single_lambda`: decomposition with smoothing splines `ss` with the `single_lambda` strategy
+    - `ss_fix_ratio`: decomposition with smoothing splines `ss` with the `fix_ratio` strategy
+    - `ss_grid_search`: decomposition with smoothing splines `ss` with the `grid_search` strategy
+    - `ss_iter_search`: decomposition with smoothing splines `ss` with the `iter_search` strategy
+    - `bspl`: decomposition with cubic splines `cs`
 """
 function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                             J = 10, 
@@ -1229,11 +1261,7 @@ function plot(obs::AbstractVector{T}, truth::AbstractVector{T}, D::MonoDecomp, o
     yup, ydown = predict(D.workspace, x0, D.γup, D.γdown)
     e1 = round(norm(yup + ydown - y0)^2 / length(y0), digits = digits)
     e2 = round(norm(other - y0)^2 / length(y0), digits = digits)
-    if competitor == "ss"
-        # lbl_other = L"\hat y_{ss}"
-        # lbl_other = latexstring("\$\\hat y_{ss} ($e2)\$")
-        lbl_other = latexstring("\$\\hat f_{\\mathrm{ss}} ($e2)\$")
-    end
+    lbl_other = latexstring("\$\\hat{\\mkern-5mu f}_{\\mathrm{$competitor}} ($e2)\$") # adjust the hat location by \mkern
     if isnothing(title)
         title = ""
     else
@@ -1252,8 +1280,11 @@ function plot(obs::AbstractVector{T}, truth::AbstractVector{T}, D::MonoDecomp, o
     end
     fig = scatter(x, y; title = prefix_title * title * postfix_title, label = "", ms = 2, xlab = L"x", ylab = L"y", kw...)
     # lbls = [L"\hat f_u", L"\hat f_d", latexstring("\$\\hat y_u+\\hat y_d ($e1)\$"), "truth"]
-    lbls = [L"\hat f_{\mathrm{up}}", L"\hat f_{\mathrm{down}}", latexstring("\$\\hat f_{\\mathrm{up}}+\\hat f_{\\mathrm{down}} ($e1)\$"), L"f"]
-    plot!(fig, x0, yup, label = lbls[1], ls = :dot)
+    #lbls = [L"\hat f_{\mathrm{up}}", L"\hat f_{\mathrm{down}}", latexstring("\$\\hat f_{\\mathrm{up}}+\\hat {f_{\\mathrm{down}}} ($e1)\$"), L"f"]
+    lbls = [L"\hat{\mkern-5mu f}_u", L"\hat{\mkern-5mu f}_d", latexstring("\$\\hat{\\mkern-5mu f}_u+\\hat{\\mkern-5mu f}_d ($e1)\$"), L"f"]
+    plot!(fig, x0, yup, label = "", ls = :dot)
+    N = length(x0)
+    plot!(fig, x0[1:20:N], yup[1:20:N], label = lbls[1], ls = :dot, markershape = :+, markersize = 2)
     plot!(fig, x0, ydown, label = lbls[2], ls = :dot)
     plot!(fig, x0, yup + ydown, 
             # label = L"\hat y_u + \hat y_d", 
@@ -1354,7 +1385,7 @@ function cvplot(μerr::AbstractVector{T}, σerr::Union{Nothing, AbstractVector{T
         title = "$nfold-fold CV error"
     end
     if isnothing(σerr)
-        p = plot(f.(paras), μerr, xlab = lbl, title = title, legend = false, markershape = :x)
+        p = plot(f.(paras), μerr, xlab = lbl, title = title, legend = false, markershape = :x, ms = 2)
     else
         p = plot(f.(paras), μerr, yerrors = σerr, xlab = lbl, title = title, legend = false)
     end
@@ -1366,13 +1397,21 @@ function cvplot(μerr::AbstractVector{T}, σerr::Union{Nothing, AbstractVector{T
 end
 
 # assume matrix does not reduce to vector
-function cvplot(μerr::AbstractMatrix{T}, σerr::AbstractMatrix{T}, para1::AbstractVector{T}, para2::AbstractVector{T}; lbl = ["", ""], title = "", nfold = 10, ind0 = [nothing, nothing]) where T <: AbstractFloat
+function cvplot(μerr::AbstractMatrix{T}, σerr::Union{Nothing, AbstractMatrix{T}}, para1::AbstractVector{T}, para2::AbstractVector{T}; lbl = ["", ""], title = "", nfold = 10, ind0 = [nothing, nothing]) where T <: AbstractFloat
     n1 = length(para1)
     n2 = length(para2)
-    if n1 == 1
-        return cvplot(μerr[1, :], σerr[1, :], para2, nfold = nfold, ind0 = ind0[2])
-    elseif n2 == 1
-        return cvplot(μerr[:, 1], σerr[:, 1], para1, nfold = nfold, ind0 = ind0[1])
+    if isnothing(σerr)
+        if n1 == 1
+            return cvplot(μerr[1, :], nothing, para2, nfold = nfold, ind0 = ind0[2], lbl = lbl[2])
+        elseif n2 == 1
+            return cvplot(μerr[:, 1], nothing, para1, nfold = nfold, ind0 = ind0[1], lbl = lbl[1])
+        end
+    else
+        if n1 == 1
+            return cvplot(μerr[1, :], σerr[1, :], para2, nfold = nfold, ind0 = ind0[2], lbl = lbl[2])
+        elseif n2 == 1
+            return cvplot(μerr[:, 1], σerr[:, 1], para1, nfold = nfold, ind0 = ind0[1], lbl = lbl[1])
+        end    
     end
     n, m = size(μerr)
     @assert n == length(para1)
