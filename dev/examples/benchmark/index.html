@@ -10,6 +10,7 @@ nλ = ifelse(occursin(&quot;single_lambda&quot;, competitor), 1, nλ)
 one_se_rule = false
 resfolder0 = &quot;/tmp&quot;
 timestamp = replace(strip(read(`date -Iseconds`, String)), &quot;:&quot; =&gt; &quot;_&quot;)
+n = 100
 if length(ARGS) &gt; 0
     @info &quot;Use args passed from CLI&quot;
     competitor = ARGS[1]
@@ -24,9 +25,10 @@ if length(ARGS) &gt; 0
     f = ARGS[7]
     if length(ARGS) &gt; 7
         timestamp = replace(strip(ARGS[8]), &quot;:&quot; =&gt; &quot;_&quot;) # passed from scripts
+        n = parse(Int, ARGS[9])
     end
 end
-resfolder = joinpath(resfolder0, &quot;nrep$nrep-nfold$nfold-nlam$nλ-1se$(one_se_rule)-$competitor-$timestamp&quot;)
+resfolder = joinpath(resfolder0, &quot;nrep$nrep-nfold$nfold-nlam$nλ-1se$(one_se_rule)-$competitor-$timestamp-n$n&quot;)
 if !isdir(resfolder)
     mkdir(resfolder)
 end
@@ -34,6 +36,7 @@ end
 
 benchmarking(
     f;
+    n = n,
     σs = [0.1, 0.2, 0.4, 0.5, 1.0, 1.5, 2.0], # noise level to be surveyed
     jplot = false, # μerr vs σs
     nrep = nrep, # NB: for fast auto-generation procedure, only use nrep = 1; in the paper, use nrep = 100
@@ -45,6 +48,8 @@ benchmarking(
     resfolder = resfolder,
     verbose = false,
     show_progress = true
-)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">[ Info: Results are saved into /tmp/nrep1-nfold2-nlam1-1sefalse-ss_single_lambda-2025-03-11T21_21_29+00_00
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">[ Info: Results are saved into /tmp/nrep1-nfold2-nlam1-1sefalse-ss_single_lambda-2025-03-12T17_40_21+00_00-n100
 [ Info: Benchmarking x^2 with 1 repetitions
-x^2 (nrep = 1), iter = 1:  29%|███████▏                 |  ETA: 0:01:43x^2 (nrep = 1), iter = 1:  43%|██████████▊              |  ETA: 0:01:04x^2 (nrep = 1), iter = 1:  57%|██████████████▎          |  ETA: 0:00:41x^2 (nrep = 1), iter = 1:  71%|█████████████████▉       |  ETA: 0:00:24x^2 (nrep = 1), iter = 1:  86%|█████████████████████▍   |  ETA: 0:00:14x^2 (nrep = 1), iter = 1: 100%|█████████████████████████| Time: 0:01:47</code></pre><div class="admonition is-success"><header class="admonition-header">run from command line</header><div class="admonition-body"><pre><code class="nohighlight hljs">julia examples/benchmark.jl ss_single_lambda /tmp 2 1 2 false</code></pre><p>You can also enable the debug mode to print more internal steps as follows</p><pre><code class="nohighlight hljs">JULIA_DEBUG=MonotoneDecomposition julia examples/benchmark.jl ss_single_lambda /tmp 2 1 2 false</code></pre></div></div><div class="admonition is-success"><header class="admonition-header">summary results</header><div class="admonition-body"><p>After obtaining results, we can obtain the summarized tex file (used in the manuscript) as follows.</p><pre><code class="language-julia hljs">MonotoneDecomposition.summary(resfolder = resfolder)</code></pre></div></div></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../md_SE/">« Monotone Decomposition</a><a class="docs-footer-nextpage" href="../benchmark_parallel/">Benchmarking in Parallel »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Tuesday 11 March 2025 21:27">Tuesday 11 March 2025</span>. Using Julia version 1.8.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+x^2 (nrep = 1), iter = 1:  29%|███████▏                 |  ETA: 0:01:45x^2 (nrep = 1), iter = 1:  43%|██████████▊              |  ETA: 0:01:05x^2 (nrep = 1), iter = 1:  57%|██████████████▎          |  ETA: 0:00:42x^2 (nrep = 1), iter = 1:  71%|█████████████████▉       |  ETA: 0:00:25x^2 (nrep = 1), iter = 1:  86%|█████████████████████▍   |  ETA: 0:00:11┌ Warning: the optimal is on the right boundary of λs
+└ @ MonotoneDecomposition ~/work/MonotoneDecomposition.jl/MonotoneDecomposition.jl/src/mono_decomp.jl:195
+x^2 (nrep = 1), iter = 1: 100%|█████████████████████████| Time: 0:01:28</code></pre><div class="admonition is-success"><header class="admonition-header">run from command line</header><div class="admonition-body"><pre><code class="nohighlight hljs">julia examples/benchmark.jl ss_single_lambda /tmp 2 1 2 false</code></pre><p>You can also enable the debug mode to print more internal steps as follows</p><pre><code class="nohighlight hljs">JULIA_DEBUG=MonotoneDecomposition julia examples/benchmark.jl ss_single_lambda /tmp 2 1 2 false</code></pre></div></div><div class="admonition is-success"><header class="admonition-header">summary results</header><div class="admonition-body"><p>After obtaining results, we can obtain the summarized tex file (used in the manuscript) as follows.</p><pre><code class="language-julia hljs">MonotoneDecomposition.summary(resfolder = resfolder)</code></pre></div></div></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../md_SE/">« Monotone Decomposition</a><a class="docs-footer-nextpage" href="../benchmark_parallel/">Benchmarking in Parallel »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Wednesday 12 March 2025 17:47">Wednesday 12 March 2025</span>. Using Julia version 1.8.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
