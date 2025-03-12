@@ -22,9 +22,9 @@ D, μmin, errs, σerrs = cv_mono_decomp_cs(x, y, ss = μs,
                             nfold = 10, nfold_pre = 10);
 yhat, yhatnew = cubic_spline(D.workspace.J)(x, y, x0);
 # The CV error curve for `J` is
-![](/tmp/cvspl_bspl.png)
+# ![](/tmp/cvspl_bspl.png)
 # And the CV error curve for `μ` is
-![](/tmp/cvspl.png)
+# ![](/tmp/cvspl.png)
 # Plot the fitted curves:
 plot([x, y], [x0, y0], D, yhatnew, prefix_title = "SE (ℓ = 1.0, σ = 0.5): ", competitor = "cs")
 # Save the figure

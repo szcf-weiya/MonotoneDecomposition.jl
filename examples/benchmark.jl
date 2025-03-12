@@ -13,6 +13,7 @@ nλ = ifelse(occursin("single_lambda", competitor), 1, nλ)
 one_se_rule = false
 resfolder0 = "/tmp"
 timestamp = replace(strip(read(`date -Iseconds`, String)), ":" => "_")
+n = 100
 if length(ARGS) > 0
     @info "Use args passed from CLI"
     competitor = ARGS[1]
@@ -27,9 +28,10 @@ if length(ARGS) > 0
     f = ARGS[7]
     if length(ARGS) > 7
         timestamp = replace(strip(ARGS[8]), ":" => "_") # passed from scripts
+        n = parse(Int, ARGS[9])
     end
 end
-resfolder = joinpath(resfolder0, "nrep$nrep-nfold$nfold-nlam$nλ-1se$(one_se_rule)-$competitor-$timestamp")
+resfolder = joinpath(resfolder0, "nrep$nrep-nfold$nfold-nlam$nλ-1se$(one_se_rule)-$competitor-$timestamp-n$n")
 if !isdir(resfolder)
     mkdir(resfolder)
 end
@@ -37,6 +39,7 @@ end
 
 benchmarking(
     f;
+    n = n,
     σs = [0.1, 0.2, 0.4, 0.5, 1.0, 1.5, 2.0], # noise level to be surveyed
     jplot = false, # μerr vs σs
     nrep = nrep, # NB: for fast auto-generation procedure, only use nrep = 1; in the paper, use nrep = 100
