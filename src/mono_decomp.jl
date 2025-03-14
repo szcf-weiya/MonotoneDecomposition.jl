@@ -198,7 +198,9 @@ function cv_smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, λs::Abstr
     end
     optlam = λs[ind]
     if !isnothing(figname)
-        savefig(cvplot(μerr, σerr, λs, nfold = nfold, ind0 = ind, lbl = "λ"), figname)
+        # save to sil
+        serialize(figname[1:end-4] * ".sil", [μerr, σerr, λs, nfold, ind])
+        savefig(cvplot(μerr, σerr, λs, nfold = nfold, ind0 = ind, lbl = "\\lambda"), figname)
     end
     spl = R"smooth.spline($x, $y, lambda = $optlam, keep.stuff = TRUE)"
     Σ = recover(rcopy(R"$spl$auxM$Sigma"))
@@ -417,13 +419,14 @@ scatter!(x, ydown)
 """
 function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname = nothing, 
                                                             verbose = true,
-                                                            nfold = 10, nfold_pre = length(x),
+                                                            nfold = 10, nfold_pre = 10,
                                                             tol = 1e-7,
                                                             tol_boundary = 1e-1,
                                                             x0 = x, # test point of x
                                                             method = "single_lambda", # fix_ratio, iter_search, grid_search
                                                             nk = 20, #used in fix_ratio
                                                             nλ = 10, rλ = 0.5, # used in grid_search
+                                                            μrange = nothing,
                                                             ngrid_μ = 20, # used in double grid
                                                             rλs = nothing,
                                                             rel_tol = 1e-1, maxiter = 10, # iter_search
@@ -456,10 +459,12 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
     # s_discrepancy = [max(eps(), min(s_residual, s_smoothness)) / 10^k_magnitude, 
     #                             max(s_residual, s_smoothness) * 10^k_magnitude]
     s_discrepancy = [eps(), max(s_residual, s_smoothness, eps()) * 10^k_magnitude]
-    if s0 == 0
-        μrange = [eps(), eps() * 10^k_magnitude]
-    else
-        μrange = s_discrepancy / s0^2
+    if isnothing(μrange)
+        if s0 == 0
+            μrange = [eps(), eps() * 10^k_magnitude]
+        else
+            μrange = s_discrepancy / s0^2
+        end
     end
     verbose && @info "μrange for compatible terms: $μrange"
     verbose && @info "s0 = $s0, s_residual = $s_residual, s_smoothness = $s_smoothness, s_discrepancy = $s_discrepancy"
@@ -1261,7 +1266,11 @@ function plot(obs::AbstractVector{T}, truth::AbstractVector{T}, D::MonoDecomp, o
     yup, ydown = predict(D.workspace, x0, D.γup, D.γdown)
     e1 = round(norm(yup + ydown - y0)^2 / length(y0), digits = digits)
     e2 = round(norm(other - y0)^2 / length(y0), digits = digits)
-    lbl_other = latexstring("\$\\hat{\\mkern-5mu f}_{\\mathrm{$competitor}} ($e2)\$") # adjust the hat location by \mkern
+    adjust_hat_in_latex = ""
+    if Plots.backend() == Plots.PGFPlotsXBackend()
+        adjust_hat_in_latex = raw"\mkern-5mu"
+    end
+    lbl_other = latexstring("\$\\hat{$adjust_hat_in_latex f}_{\\mathrm{$competitor}} ($e2)\$") # adjust the hat location by \mkern
     if isnothing(title)
         title = ""
     else
@@ -1279,9 +1288,9 @@ function plot(obs::AbstractVector{T}, truth::AbstractVector{T}, D::MonoDecomp, o
         end
     end
     fig = scatter(x, y; title = prefix_title * title * postfix_title, label = "", ms = 2, xlab = L"x", ylab = L"y", kw...)
-    # lbls = [L"\hat f_u", L"\hat f_d", latexstring("\$\\hat y_u+\\hat y_d ($e1)\$"), "truth"]
-    #lbls = [L"\hat f_{\mathrm{up}}", L"\hat f_{\mathrm{down}}", latexstring("\$\\hat f_{\\mathrm{up}}+\\hat {f_{\\mathrm{down}}} ($e1)\$"), L"f"]
-    lbls = [L"\hat{\mkern-5mu f}_u", L"\hat{\mkern-5mu f}_d", latexstring("\$\\hat{\\mkern-5mu f}_u+\\hat{\\mkern-5mu f}_d ($e1)\$"), L"f"]
+    lbls = [L"\hat{%$adjust_hat_in_latex f}_u", 
+            L"\hat{%$adjust_hat_in_latex f}_d", 
+            latexstring("\$\\hat{$adjust_hat_in_latex f}_u+\\hat{$adjust_hat_in_latex f}_d ($e1)\$"), L"f"]
     plot!(fig, x0, yup, label = "", ls = :dot)
     N = length(x0)
     plot!(fig, x0[1:20:N], yup[1:20:N], label = lbls[1], ls = :dot, markershape = :+, markersize = 2)
@@ -1340,11 +1349,10 @@ function cvplot(sil::String, competitor = "bspl", title = "Leave-one-out CV Erro
         title = title * "(J = $J)"
     elseif competitor == "bspl2"
         μerr, σerr, Jopt, μopt, Js, ss, nfold = deserialize(sil)
-        if nfold < 100
-            title = "$nfold-CV Error"
-        end
+        title = "$nfold-fold CV Error"
     else
         μerr, σerr, μ, λ, nfold = deserialize(sil)
+        title = "$nfold-fold CV Error"        
         if length(λ) == 1
             λ1 = round.(λ[1], sigdigits=3)
             title = title * "(λ = $λ1)"
@@ -1359,8 +1367,21 @@ function cvplot(sil::String, competitor = "bspl", title = "Leave-one-out CV Erro
     else
         # cvplot(μerr, σerr, μ, λ, nfold = nfold, lbl = [L"\log_{10}\mu", L"\lambda"], title = title)
         # -10 is tried for a better difference
-        offset = 10
-        cvplot(μerr[1:end-offset, :], σerr, μ[1:end-offset], λ, nfold = nfold, lbl = [L"\log_{10}\mu", L"\lambda"], title = title)
+        # offset = 10
+        offset = 0
+        cvplot(μerr[1:end-offset, :], σerr, μ[1:end-offset], λ, nfold = nfold, lbl = ["\\log_{10}\\mu", "\\lambda"], title = title)
+    end
+end
+
+function add_log_str(lbl::AbstractString)
+    if isa(lbl, String)
+        if occursin("\\log_{10}", lbl)
+            return lbl
+        else
+            return "\\log_{10}" * lbl
+        end
+    else
+        return lbl
     end
 end
 
@@ -1375,9 +1396,7 @@ function cvplot(μerr::AbstractVector{T}, σerr::Union{Nothing, AbstractVector{T
             end
         else
             f = x -> log10(x)
-            if isnothing(lbl)
-                lbl = L"\log_{10}"
-            end
+            lbl = add_log_str(lbl)
         end
     end
     ind = argmin(μerr)
@@ -1385,9 +1404,9 @@ function cvplot(μerr::AbstractVector{T}, σerr::Union{Nothing, AbstractVector{T
         title = "$nfold-fold CV error"
     end
     if isnothing(σerr)
-        p = plot(f.(paras), μerr, xlab = lbl, title = title, legend = false, markershape = :x, ms = 2)
+        p = plot(f.(paras), μerr, xlab = latexstring(lbl), title = title, legend = false, markershape = :x, ms = 2)
     else
-        p = plot(f.(paras), μerr, yerrors = σerr, xlab = lbl, title = title, legend = false)
+        p = plot(f.(paras), μerr, yerrors = σerr, xlab = latexstring(lbl), title = title, legend = false)
     end
     annotate!(p, [(f.(paras)[ind], μerr[ind], ("o", :red))])
     if !isnothing(ind0)
@@ -1397,20 +1416,21 @@ function cvplot(μerr::AbstractVector{T}, σerr::Union{Nothing, AbstractVector{T
 end
 
 # assume matrix does not reduce to vector
-function cvplot(μerr::AbstractMatrix{T}, σerr::Union{Nothing, AbstractMatrix{T}}, para1::AbstractVector{T}, para2::AbstractVector{T}; lbl = ["", ""], title = "", nfold = 10, ind0 = [nothing, nothing]) where T <: AbstractFloat
+function cvplot(μerr::AbstractMatrix{T}, σerr::Union{Nothing, AbstractMatrix{T}}, para1::AbstractVector{T}, para2::AbstractVector{T}; 
+                    lbl = ["", ""], title = "", nfold = 10, ind0 = [nothing, nothing]) where T <: AbstractFloat
     n1 = length(para1)
     n2 = length(para2)
     if isnothing(σerr)
         if n1 == 1
-            return cvplot(μerr[1, :], nothing, para2, nfold = nfold, ind0 = ind0[2], lbl = lbl[2])
+            return cvplot(μerr[1, :], nothing, para2, nfold = nfold, ind0 = ind0[2], lbl = lbl[2], title = title)
         elseif n2 == 1
-            return cvplot(μerr[:, 1], nothing, para1, nfold = nfold, ind0 = ind0[1], lbl = lbl[1])
+            return cvplot(μerr[:, 1], nothing, para1, nfold = nfold, ind0 = ind0[1], lbl = lbl[1], title = title)
         end
     else
         if n1 == 1
-            return cvplot(μerr[1, :], σerr[1, :], para2, nfold = nfold, ind0 = ind0[2], lbl = lbl[2])
+            return cvplot(μerr[1, :], σerr[1, :], para2, nfold = nfold, ind0 = ind0[2], lbl = lbl[2], title = title)
         elseif n2 == 1
-            return cvplot(μerr[:, 1], σerr[:, 1], para1, nfold = nfold, ind0 = ind0[1], lbl = lbl[1])
+            return cvplot(μerr[:, 1], σerr[:, 1], para1, nfold = nfold, ind0 = ind0[1], lbl = lbl[1], title = title)
         end    
     end
     n, m = size(μerr)
@@ -1423,6 +1443,7 @@ function cvplot(μerr::AbstractMatrix{T}, σerr::Union{Nothing, AbstractMatrix{T
             f = x -> x
         else
             f = x -> log10(x)
+            lbl[1] = add_log_str(lbl[1])
         end    
     end
     if length(para2) < 3
@@ -1432,9 +1453,11 @@ function cvplot(μerr::AbstractMatrix{T}, σerr::Union{Nothing, AbstractMatrix{T
             g = x -> x
         else
             g = x -> log10(x)
+            lbl[2] = add_log_str(lbl[2]) 
         end    
     end
-    p = heatmap(g.(para2), f.(para1), μerr, xlab = lbl[2], ylab = lbl[1], title = title)
+    ## assigning a latexstring to a[1] will convert the type from LaTeXString to String
+    p = heatmap(g.(para2), f.(para1), μerr, xlab = latexstring(lbl[2]), ylab = latexstring(lbl[1]), title = title)
     ind = argmin(μerr)
     annotate!(p, [(g(para2[ind[2]]), f(para1[ind[1]]), ("o", :red))])
     if !isnothing(ind0[1])
@@ -1606,7 +1629,13 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, paras::AbstractMatrix
     return D, paras[:, 1], μerr, σerr
 end
 
-function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}, λ::AbstractVector{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), same_J_after_CV = true, prop_nknots = 1.0, include_boundary = false, strict = false) where T <: AbstractFloat
+function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}, λ::AbstractVector{T}; 
+                    nfold = 10, figname = "/tmp/cv_curve.png", 
+                    seed = rand(UInt64), 
+                    same_J_after_CV = true, 
+                    prop_nknots = 1.0, 
+                    include_boundary = false, 
+                    strict = false) where T <: AbstractFloat
     n = length(x)
     folds = div_into_folds(n, K = nfold, seed = seed)
     nλ = length(λ)
