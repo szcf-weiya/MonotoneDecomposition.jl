@@ -24,9 +24,13 @@ D, μmin, errs, σerrs = cv_mono_decomp_cs(x, y, ss = μs,
                             nfold = 10, nfold_pre = 10);
 yhat, yhatnew = cubic_spline(D.workspace.J)(x, y, x0);
 # The CV error curve for `J` is
+#
 # ![](cvspl_bspl.png)
+#
 # And the CV error curve for `μ` is
+#
 # ![](cvspl.png)
+#
 # Plot the fitted curves:
 plot([x, y], [x0, y0], D, yhatnew, prefix_title = "SE (ℓ = 1.0, σ = 0.5): ", competitor = "cs")
 # Save the figure:
@@ -42,18 +46,17 @@ plot([x, y], [x0, y0], D, yhatnew, prefix_title = "SE (ℓ = 1.0, σ = 0.5): ", 
 #     Thus, if necessary, we can re-plot it and save as a high-quality figure.
 #     Also save the CV results:
 #     ```julia
-#     mv("/tmp/cvspl_bspl_J.sil", "../res/demo/", force = true)
-#     res = deserialize("/tmp/cvspl_bspl_J.sil")
-#     μerr, σerr, Js, nfold, ind = res
+#     mv("cvspl_bspl_J.sil", "../res/demo/cvspl_bspl_J.sil", force = true)
+#     μerr, σerr, Js, nfold, ind = deserialize("../res/demo/cvspl_bspl_J.sil")
 #     cvplot(μerr, nothing, 1.0 .* Js, nfold = nfold, ind0 = ind, lbl = L"J", title = "10-fold CV Error (Cubic Spline)")
-#     savefig("../res/demo/demo-seed$seed-cs_vs_md-1J-cs-cv.pdf")
+#     savefig("../res/demo/demo-seed$seed-cs_vs_md-cs-cv.pdf")
 #     ```
 
 # Cross-validation plot
 cvplot(errs, nothing, 1.0 * D.workspace.J:D.workspace.J, μs, lbl = ["", "\\log_{10}\\mu"], title = "10-fold CV Error (J = $(D.workspace.J))")
 # Also backup the results
 # ```shell
-# cp /tmp/cvspl_Jmu.sil ../res/demo
+# cp cvspl_Jmu.sil ../res/demo/
 # ```
 # And save the figure
 # ```julia
@@ -79,12 +82,15 @@ plot([x, y], [x0, y0], D, yhatnew, prefix_title = "SE (ℓ = 1, σ = 0.5): ", co
 # savefig("../res/demo/demo-seed$seed-cs_vs_md-J_and_mu-fit.pdf")
 # ```
 # the CV error curve for the cubic spline
+#
 # ![][cvbspl_varyJ_bspl.png]
+#
 # and the CV error curve for the decomposition with cubic splines
+#
 # ![](cvbspl_varyJ.png)
 
 # Or we can replot the heatmap of CV-error along the two parameter (J, μ) is as follows,
-cvplot(errs, nothing, Js * 1.0, μs, lbl = ["J", "\\mu"])
+cvplot(errs, nothing, Js * 1.0, μs, lbl = ["J", "\\mu"], title = "10-fold CV Error")
 # save figure
 # ```julia
 # savefig("../res/demo/demo-seed$seed-cs_vs_md-J_and_mu-cv.pdf")
@@ -92,8 +98,8 @@ cvplot(errs, nothing, Js * 1.0, μs, lbl = ["J", "\\mu"])
 
 # Backup the results
 # ```julia
-# cp /tmp/cvbspl_varyJ_bspl_J.sil ../res/demo
-# cp /tmp/cvbspl_varyJ_Jmu.sil ../res/demo
+# cp cvbspl_varyJ_bspl_J.sil ../res/demo
+# cp cvbspl_varyJ_Jmu.sil ../res/demo
 # ```
 
 # ## With Smoothing Splines
@@ -108,17 +114,20 @@ D, μmin, μs, errs, σerrs, yhat, yhatnew = cv_mono_decomp_ss(x, y,
                                             figname = "cvss_1lam.png");
 
 # Firstly, the cross-validation curve for the smoothing spline is
+#
 # ![](cvss_1lam_ss.png)
+#
 # !!! tip "Reproducing high-quality figure in manuscript"
 #     To produce a high-quality figure as in the manuscript
 #     ```julia
-#     μerr, σerr, λs, nfold, ind = deserialize("/tmp/cvss_1lam_ss.sil")
+#     μerr, σerr, λs, nfold, ind = deserialize("cvss_1lam_ss.sil")
 #     # cvplot(μerr, σerr, λs, nfold = nfold, ind0 = ind, lbl = "\\lambda")
 #     cvplot(μerr, nothing, λs, nfold = nfold, ind0 = ind, lbl = "\\lambda", title = "10-fold CV (Smoothing Spline)")
-#     savefig("../res/demo/demo-seed$seed-ss_vs_md-1lam_and_mu-ss-cv.pdf")
+#     savefig("../res/demo/demo-seed$seed-ss_vs_md-ss-cv.pdf")
 #     ```
 #
 # Then, given the optimal `λ`, tune `μ`, the CV error curve is as follows:
+#
 # ![](cvss_1lam.png)
 # 
 # !!! tip "Reproducing high-quality figure in manuscript"
@@ -151,12 +160,14 @@ plot([x, y], [x0, y0], D, yhatnew, prefix_title = "SE (ℓ = 1, σ = 0.5): ")
 # ```
 
 # The CV error heatmap is 
+#
 # ![](cvss_varylam.png)
+#
 # Alternatively, we can replot it:
 cvplot("/tmp/cvss_varylam.sil", "ss")
 # save the results
 # ```shell
-# mv /tmp/cvss_varylam.sil ../res/demo/
+# mv cvss_varylam.sil ../res/demo/
 # ```
 # and figure
 # ```julia

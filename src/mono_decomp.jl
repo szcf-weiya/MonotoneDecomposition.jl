@@ -569,14 +569,15 @@ Run benchmarking experiments for decomposition with cubic splines on `n` observa
 - `one_se_rule`: whether to use the one-standard-error rule to select the parameter after cross-validation procedure
 - `μs`: the candidates of tuning parameters for the discrepancy parameter
 """
-function benchmarking_cs(n::Int = 100, σ::Float64 = 0.5, f::Union{Function, String} = x->x^3; fixJ = true,
+function benchmarking_cs(n::Int = 100, σ::Union{Real, Nothing} = 0.5, f::Union{Function, String} = x->x^3; fixJ = true,
                                                                                figname_cv = nothing,
                                                                                figname_fit = nothing,
                                                                                Js = 4:20,
+                                                                               snr = 1.0,
                                                                                nfold = 10,
                                                                                one_se_rule = false,
                                                                                μs = 10.0 .^ (-6:0.5:0))
-    x, y, x0, y0 = gen_data(n, σ, f)
+    x, y, x0, y0 = gen_data(n, σ, f, snr = snr)
     # J is determined from cubic_spline (deprecated the choice of arbitrary J)
     J, yhat, yhatnew = cv_cubic_spline(x, y, x0, nfold = nfold, one_se_rule = one_se_rule)
     if fixJ
@@ -609,14 +610,15 @@ Run benchmarking experiments for decomposition with smoothing splines on `n` obs
     - `grid_search`
     - `iter_search`
 """
-function benchmarking_ss(n::Int = 100, σ::Float64 = 0.5, 
-                            f::Union{Function, String} = x->x^3; 
+function benchmarking_ss(n::Int = 100, σ::Union{Real, Nothing} = 0.5, 
+                            f::Union{Function, String} = x->x^3;
+                                snr = 1.0, 
                                 nfold = 5, one_se_rule = true,
                                 method = "single_lambda",
                                 figname_cv = nothing,
                                 figname_fit = nothing, kw...
                         )
-    x, y, x0, y0 = gen_data(n, σ, f)
+    x, y, x0, y0 = gen_data(n, σ, f, snr = snr)
     D, μopt, μs, errs, σerrs, yhat, yhatnew = cv_mono_decomp_ss(x, y; x0 = x0,
                                                                 figname = figname_cv,
                                                                 nfold = nfold,
@@ -657,6 +659,7 @@ Run benchmarking experiments for monotone decomposition on curve `f`. The candid
     - `bspl`: decomposition with cubic splines `cs`
 """
 function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
+                            snrs = [0.1, 0.5, 1, 2, 10],
                             J = 10, 
                             μs = 10.0 .^ (-6:0.5:0), ## bspl
                             jplot = false, nrep = 100,
@@ -665,10 +668,14 @@ function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                             resfolder = "/tmp",
                             ind = 1:4,
                             show_progress = true,
+                            use_snr = false,
                             nλ = 20, kw...)
     @info "Benchmarking $f with $nrep repetitions"
     title = "$f (nrep = $nrep)"
     filename = "$f.sil"
+    if use_snr # use signal to noise ratio
+        σs = [nothing for _ in snrs]
+    end
     nσ = length(σs)
     res = zeros(nrep, 6, nσ)
     # res = SharedArray{Float64}(nrep, 4, nσ)
@@ -691,12 +698,14 @@ function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                                                         figname_fit = figname_fit,
                                                         nfold = nfold,
                                                         nλ = nλ,
+                                                        snr = snrs[j],
                                                         one_se_rule = one_se_rule,
                                                         method = competitor[4:end], kw...)
             else
                 res[i, :, j] = benchmarking_cs(n, σ, f; figname_cv = figname_cv, 
                                                         figname_fit = figname_fit,
                                                         μs = μs, 
+                                                        snr = snrs[j],
                                                         one_se_rule = one_se_rule,
                                                         fixJ = !occursin("cvbspl2", competitor), kw...)
             end
@@ -828,7 +837,9 @@ function summary(;nλ = 20,
             # correction for commits before 372ab2f8a8e47b52fe556abdb0c3f3ab0a37dd1b (2022-02-13)
             # res[:, 1:4, :] .= res[:, 1:4, :] .^ 2 / nrep
             if size(res, 2) > 4
-                snr = max.(res[:, 5, :] ./ res[:, 3, :] .- 1, 0)
+                # var(y0) / σ^2
+                snr = hcat([res[:, 6, i] ./ σs[i]^2 for i in 1:length(σs)]...)
+                println(size(snr))
                 snr_μs[i] = mean(snr, dims = 1)[1:1, ind]'
                 snr_σs[i] = std(snr, dims = 1)[1:1, ind]' / sqrt(nrep)
             else
@@ -1287,7 +1298,7 @@ function plot(obs::AbstractVector{T}, truth::AbstractVector{T}, D::MonoDecomp, o
             title *= "μ = $(round(D.μ, sigdigits=3))"
         end
     end
-    fig = scatter(x, y; title = prefix_title * title * postfix_title, label = "", ms = 2, xlab = L"x", ylab = L"y", kw...)
+    fig = scatter(x, y; title = prefix_title * title * postfix_title, label = "", ms = 2, xlab = L"x", ylab = L"y", labelfontsize = 14, legendfontsize = 14, tickfontsize = 12, titlefontsize = 16, kw...)
     lbls = [L"\hat{%$adjust_hat_in_latex f}_u", 
             L"\hat{%$adjust_hat_in_latex f}_d", 
             latexstring("\$\\hat{$adjust_hat_in_latex f}_u+\\hat{$adjust_hat_in_latex f}_d ($e1)\$"), L"f"]
@@ -1404,9 +1415,9 @@ function cvplot(μerr::AbstractVector{T}, σerr::Union{Nothing, AbstractVector{T
         title = "$nfold-fold CV error"
     end
     if isnothing(σerr)
-        p = plot(f.(paras), μerr, xlab = latexstring(lbl), title = title, legend = false, markershape = :x, ms = 2)
+        p = plot(f.(paras), μerr, xlab = latexstring(lbl), title = title, legend = false, markershape = :x, ms = 2, labelfontsize = 14, legendfontsize = 14, tickfontsize = 12, titlefontsize = 16)
     else
-        p = plot(f.(paras), μerr, yerrors = σerr, xlab = latexstring(lbl), title = title, legend = false)
+        p = plot(f.(paras), μerr, yerrors = σerr, xlab = latexstring(lbl), title = title, legend = false, labelfontsize = 14, legendfontsize = 14, tickfontsize = 12, titlefontsize = 16)
     end
     annotate!(p, [(f.(paras)[ind], μerr[ind], ("o", :red))])
     if !isnothing(ind0)
@@ -1457,7 +1468,7 @@ function cvplot(μerr::AbstractMatrix{T}, σerr::Union{Nothing, AbstractMatrix{T
         end    
     end
     ## assigning a latexstring to a[1] will convert the type from LaTeXString to String
-    p = heatmap(g.(para2), f.(para1), μerr, xlab = latexstring(lbl[2]), ylab = latexstring(lbl[1]), title = title)
+    p = heatmap(g.(para2), f.(para1), μerr, xlab = latexstring(lbl[2]), ylab = latexstring(lbl[1]), title = title, labelfontsize = 14, legendfontsize = 14, tickfontsize = 12, titlefontsize = 16)
     ind = argmin(μerr)
     annotate!(p, [(g(para2[ind[2]]), f(para1[ind[1]]), ("o", :red))])
     if !isnothing(ind0[1])

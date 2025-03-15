@@ -6,25 +6,30 @@ using LaTeXStrings
 sigmoid(x::Float64; a = 5.0) = 1 / (1 + exp(-a*x))
 
 """
-    gen_data(n, σ, f::Union{Function, String}; xmin = -1, xmax = 1, k = 10)
+    gen_data(n::Int, σ::Union{Real, Nothing}, f::Union{Function, String}; xmin = -1, xmax = 1, k = 10)
 
 Generate `n` data points `(xi, yi)` from curve `f` with noise level `σ`, i.e., `yi = f(xi) + N(0, σ^2)`.
 
-For `f`,
+# Arguments
 
-- if `f` is a `Function`, just take `y = f(x)`
-- if `f = "MLP"`, it will be a simple neural network with one layer.
-- otherwise, it accepts the string with format `KernelName_Para[_OtherPara]` representing some Gaussian Processes, including
-    - `SE`, `Mat12`, `Mat32`, `Mat52`, `Para`: the length scale parameter `ℓ`
-    - `Poly`: `Para` is the degree parameter `p`
-    - `RQ`: `Para` is `ℓ` and `OtherPara` is `α`
+- for `f`
+    - if `f` is a `Function`, just take `y = f(x)`
+    - if `f = "MLP"`, it will be a simple neural network with one layer.
+    - otherwise, it accepts the string with format `KernelName_Para[_OtherPara]` representing some Gaussian Processes, including
+        - `SE`, `Mat12`, `Mat32`, `Mat52`, `Para`: the length scale parameter `ℓ`
+        - `Poly`: `Para` is the degree parameter `p`
+        - `RQ`: `Para` is `ℓ` and `OtherPara` is `α`
+- for `σ`: the noise level
+    - if `σ` is `nothing`, then `σ` is calculated to achieve given signal-to-noise ratio (`snr`)
+
+# Returns 
 
 It returns four vectors, `x, y, x0, y0`, where
 
 - `x, y`: pair points of length `n`.
 - `x0, y0`: true curve without noise, represented by `k*n` points.
 """
-function gen_data(n::Int, σ::Real, f::Union{Function, String}; k=10, xmin = -1, xmax = 1)
+function gen_data(n::Int, σ::Union{Real, Nothing}, f::Union{Function, String}; k = 10, xmin = -1, xmax = 1, snr = 1.0)
     x0 = sort(rand(k*n-(k-1)) * (xmax - xmin) .+ xmin)
     if isa(f, Function)
         y0 = f.(x0)
@@ -38,6 +43,10 @@ function gen_data(n::Int, σ::Real, f::Union{Function, String}; k=10, xmin = -1,
         y0 = gp(x0, kernel = f)
     end
     x = x0[1:k:end]
+    if isnothing(σ)
+        σ = sqrt(var(y0) / snr)
+        @info "use σ = $σ to achieve SNR = $snr"
+    end
     y = y0[1:k:end] + randn(n) * σ
     return x, y, x0, y0
     #return x, y, x0[2:2:end], y0[2:2:end] # to reduce evaluation cost
