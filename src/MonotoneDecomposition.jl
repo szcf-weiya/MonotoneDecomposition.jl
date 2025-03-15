@@ -4,6 +4,7 @@ include("utils.jl")
 include("genfunc.jl")
 include("mono_decomp.jl")
 include("mono_test.jl")
+include("benchmarking.jl")
 
 export gen_data,
        gen_kern,
