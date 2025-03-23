@@ -420,7 +420,7 @@ scatter!(x, ydown)
 function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname = nothing, 
                                                             verbose = true,
                                                             nfold = 10, nfold_pre = 10,
-                                                            tol = 1e-7,
+                                                            tol = 1e-5,
                                                             tol_boundary = 1e-1,
                                                             x0 = x, # test point of x
                                                             method = "single_lambda", # fix_ratio, iter_search, grid_search
@@ -430,7 +430,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             ngrid_μ = 20, # used in double grid
                                                             rλs = nothing,
                                                             rel_tol = 1e-1, maxiter = 10, # iter_search
-                                                            k_magnitude = 2,
+                                                            k_magnitude = 1,
                                                             seed = rand(UInt64),
                                                             prop_nknots = 1.0,
                                                             minmaxμ = 1e-1,
@@ -458,10 +458,11 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
     s_smoothness = λ * (γup .+ γdown)' * Ω * (γup .+ γdown)
     # s_discrepancy = [max(eps(), min(s_residual, s_smoothness)) / 10^k_magnitude, 
     #                             max(s_residual, s_smoothness) * 10^k_magnitude]
-    s_discrepancy = [eps(), max(s_residual, s_smoothness, eps()) * 10^k_magnitude]
+    small_tol = sqrt(eps())
+    s_discrepancy = [small_tol, max(s_residual, s_smoothness, small_tol) * 10^k_magnitude]
     if isnothing(μrange)
         if s0 == 0
-            μrange = [eps(), eps() * 10^k_magnitude]
+            μrange = [small_tol, small_tol * 10^k_magnitude]
         else
             μrange = s_discrepancy / s0^2
         end
@@ -1422,7 +1423,7 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
     while true
         iter += 1
         ifigname = isnothing(figname) ? figname : figname[1:end-4] * "_$iter.png"
-        iter % 1 == 0 && @debug "iter = $iter: narrow $(ifelse(λ_is_μ, "λ", "μ")) into $([a, b])"
+        iter % 1 == 0 && @debug "iter = $iter: narrow $(ifelse(λ_is_μ, "λ", "μ")) into $([a, b]), (b - a) / δ = $((b - a) / δ)"
         c = b - (b - a) / τ
         d = a + (b - a) / τ
         μi = [c, d]

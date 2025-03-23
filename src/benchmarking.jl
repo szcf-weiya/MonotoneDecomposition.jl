@@ -49,7 +49,7 @@ Run benchmarking experiments for decomposition with smoothing splines on `n` obs
 # Arguments
 
 - `method::String = "single_lambda"`: strategy for decomposition with smoothing spline. Possible choices:
-    - `single-lambda`
+    - `single_lambda`
     - `fix_ratio`
     - `grid_search`
     - `iter_search`
@@ -183,6 +183,8 @@ function summary(;nλ = 20,
                     methodnames = ["SmoothSpline", "MonoDecomp"], # CubicSpline
                     # σs = 0.2:0.2:2.0,
                     σs = [0.1, 0.2, 0.4, 0.5, 1.0, 1.5, 2.0],
+                    snrs = [0.1, 0.5, 1, 2, 10],
+                    use_snr = false,
                     nrep = 100, ind = 1:4,
                     curves = ["x^2" "x^3" "exp(x)" "sigmoid" "SE_1" "SE_0.1" "Mat12_1" "Mat12_0.1" "Mat32_1" "Mat32_0.1" "RQ_0.1_0.5" "Periodic_0.1_4"],
                     resfolder = "/tmp" #"../res/res_monodecomp/rocky/"
@@ -260,19 +262,24 @@ function summary(;nλ = 20,
         snr_σs = Array{AbstractMatrix{Float64}}(undef, ntitle)
         isbf = Array{AbstractMatrix{Bool}}(undef, ntitle)
         # selected noise levels
-        if length(σs) >= 10        
-            if σs == 0.2:0.2:2
-                ind = [1, 2, 3, 5] # cvbspl2 (sigmas: 0.2:0.2:2.0)
-            elseif σs == 0.1:0.1:2
-                ind = 1:20
-            else
-                # ind = [1, 5, 10]
-                ind = [1, 2, 5, 10] # cvbspl
-            end
+        if use_snr
+            ind = 1:length(snrs)
+            σs = snrs
         else
-            # ind = [1, 2, 3]
-            ind = 1:length(σs)
-            # ind = [1, 2, 4, 5, 6, 7]
+            if length(σs) >= 10        
+                if σs == 0.2:0.2:2
+                    ind = [1, 2, 3, 5] # cvbspl2 (sigmas: 0.2:0.2:2.0)
+                elseif σs == 0.1:0.1:2
+                    ind = 1:20
+                else
+                    # ind = [1, 5, 10]
+                    ind = [1, 2, 5, 10] # cvbspl
+                end
+            else
+                # ind = [1, 2, 3]
+                ind = 1:length(σs)
+                # ind = [1, 2, 4, 5, 6, 7]
+            end    
         end
         for (i, title) in enumerate(titles)
             resfile = "$(title).sil"
@@ -283,15 +290,16 @@ function summary(;nλ = 20,
             # res[:, 3, :] = res[:, 6, :] ./ res[:, 3, :]
             # correction for commits before 372ab2f8a8e47b52fe556abdb0c3f3ab0a37dd1b (2022-02-13)
             # res[:, 1:4, :] .= res[:, 1:4, :] .^ 2 / nrep
+            snr_μs = nothing
+            snr_σs = nothing
             if size(res, 2) > 4
-                # var(y0) / σ^2
-                snr = hcat([res[:, 6, i] ./ σs[i]^2 for i in 1:length(σs)]...)
-                println(size(snr))
-                snr_μs[i] = mean(snr, dims = 1)[1:1, ind]'
-                snr_σs[i] = std(snr, dims = 1)[1:1, ind]' / sqrt(nrep)
-            else
-                snr_μs = nothing
-                snr_σs = nothing
+                if !use_snr
+                    # var(y0) / σ^2
+                    snr = hcat([res[:, 6, i] ./ σs[i]^2 for i in 1:length(σs)]...)
+                    println(size(snr))
+                    snr_μs[i] = mean(snr, dims = 1)[1:1, ind]'
+                    snr_σs[i] = std(snr, dims = 1)[1:1, ind]' / sqrt(nrep)
+                end
             end
             # differences
             ds = res[:, 2, :] - res[:, 4, :]
@@ -317,6 +325,7 @@ function summary(;nλ = 20,
             right_cols = [pvals, props],
             right_col_names = ["p-value", "prop."], 
             right_align = "l", # it might be slightly worse for other columns, but center is not good for the pvalue column TODO: improve the style
-            colnames_of_rownames = ["curve", L"\sigma"], file = joinpath(resfolder0, "$filename.tex"), isbf = isbf)
+            colnames_of_rownames = ["curve", ifelse(use_snr, "SNR", L"\sigma")], 
+            file = joinpath(resfolder0, "$filename.tex"), isbf = isbf)
     end
 end

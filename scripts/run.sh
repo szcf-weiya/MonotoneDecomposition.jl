@@ -18,6 +18,6 @@ use_snr=${8:-false}
 # fi
 which julia # in case not found julia, such as run outside the tmux session
 for f in "x^2" "x^3" "exp(x)" "sigmoid" "SE_1" "SE_0.1" "Mat12_1" "Mat12_0.1" "Mat32_1" "Mat32_0.1" "RQ_0.1_0.5" "Periodic_0.1_4"; do
-# for f in "x^2" "x^3"; do # run locally for debug
-    julia --project=.. ../examples/benchmark.jl $competitor $resfolder0 $nlam $nrep $nfold $one_se_rule $f $timestamp $n $use_snr &> nrep$nrep-nfold$nfold-nlam$nlam-1se_$one_se_rule-$competitor-$f-$timestamp-n$n-snr_$use_snr.log &
+# for f in "x^3"; do # run locally for debug
+    CUDA_VISIBLE_DEVICES='-1' julia --project=.. ../examples/benchmark.jl $competitor $resfolder0 $nlam $nrep $nfold $one_se_rule $f $timestamp $n $use_snr #&> nrep$nrep-nfold$nfold-nlam$nlam-1se_$one_se_rule-$competitor-$f-$timestamp-n$n-snr_$use_snr.log &
 done
