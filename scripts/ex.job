@@ -3,5 +3,4 @@
 module load R/4.1.0
 module load julia/1.8.2
 
-
-julia --project=.. ../examples/benchmark.jl $competitor $resfolder0 $nlam $nrep $nfold $one_se_rule $f $timestamp $n $use_snr 
+CUDA_VISIBLE_DEVICES='-1' julia --project=.. ../examples/benchmark.jl $competitor $resfolder0 $nlam $nrep $nfold $one_se_rule $f $timestamp $n $use_snr 

@@ -1361,7 +1361,6 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}
     end
     μerr = dropdims(mean(err, dims = 1), dims=1)
     σerr = dropdims(std(err, dims = 1), dims=1) / sqrt(nfold)
-    serialize("/tmp/debug_muerr.sil", err)
     if !isnothing(figname)
         silname = figname[1:end-4] * ".sil"
         serialize(silname, [μerr, σerr, μ, λ, nfold])

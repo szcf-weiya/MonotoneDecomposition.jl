@@ -290,16 +290,19 @@ function summary(;nλ = 20,
             # res[:, 3, :] = res[:, 6, :] ./ res[:, 3, :]
             # correction for commits before 372ab2f8a8e47b52fe556abdb0c3f3ab0a37dd1b (2022-02-13)
             # res[:, 1:4, :] .= res[:, 1:4, :] .^ 2 / nrep
-            snr_μs = nothing
-            snr_σs = nothing
             if size(res, 2) > 4
                 if !use_snr
                     # var(y0) / σ^2
                     snr = hcat([res[:, 6, i] ./ σs[i]^2 for i in 1:length(σs)]...)
-                    println(size(snr))
                     snr_μs[i] = mean(snr, dims = 1)[1:1, ind]'
                     snr_σs[i] = std(snr, dims = 1)[1:1, ind]' / sqrt(nrep)
+                else
+                    snr_μs = nothing
+                    snr_σs = nothing            
                 end
+            else
+                snr_μs = nothing
+                snr_σs = nothing    
             end
             # differences
             ds = res[:, 2, :] - res[:, 4, :]
