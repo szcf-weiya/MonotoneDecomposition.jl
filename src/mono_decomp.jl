@@ -424,7 +424,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             tol_boundary = 1e-1,
                                                             x0 = x, # test point of x
                                                             method = "single_lambda", # fix_ratio, iter_search, grid_search
-                                                            nk = 20, #used in fix_ratio
+                                                            kmin = 0.05, kmax = 1 - 1e-8, nk = 100, #used in fix_ratio
                                                             nλ = 10, rλ = 0.5, # used in grid_search
                                                             μrange = nothing,
                                                             ngrid_μ = 20, # used in double grid
@@ -478,7 +478,9 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λ, figname = figname, nfold = nfold, tol = tol, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary)
     elseif method == "fix_ratio"
         verbose && @info "Smoothing Splines with fixratio strategy"
-        ks = range(0.05, 0.99, length = nk)
+        #ks = range(kmin, kmax, length = nk)
+        #ks = exp.(range(log.(kmin), log.(kmax), length = nk))
+        ks = 1 ./ (exp.(range(log.(1 ./ kmax .- 1), log.(1 ./ kmin .- 1), length = nk)) .+ 1)
         D, μs, errs, σerrs = cvfit(x, y, ks, λ, figname = figname, nfold = nfold, seed = seed, prop_nknots = prop_nknots)
     elseif method == "iter_search" #88
         verbose && @info "Smoothing Splines with iter-search: λ -> μ -> λ -> ... -> μ"
@@ -1064,7 +1066,7 @@ function cvplot(sil::String, competitor = "bspl", title = "Leave-one-out CV Erro
     end
 end
 
-function add_log_str(lbl::AbstractString)
+function add_log_str(lbl::Union{AbstractString, Nothing})
     if isa(lbl, String)
         if occursin("\\log_{10}", lbl)
             return lbl
@@ -1307,7 +1309,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, paras::AbstractMatrix
     if !isnothing(figname)
         silname = figname[1:end-4] * ".sil"
         serialize(silname, [μerr, σerr, paras, nfold])
-        savefig(cvplot(μerr, σerr, paras[:, 1], nfold = nfold), figname)
+        savefig(cvplot(μerr, σerr, paras[:, 1], nfold = nfold, lbl = "μ"), figname)
     end
     ind = argmin(μerr)
     workspace = WorkSpaceSS()
