@@ -425,6 +425,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             x0 = x, # test point of x
                                                             method = "single_lambda", # fix_ratio, iter_search, grid_search
                                                             kmin = 0.05, kmax = 1 - 1e-8, nk = 100, #used in fix_ratio
+                                                            multi_fix_ratio = false,
                                                             nλ = 10, rλ = 0.5, # used in grid_search
                                                             μrange = nothing,
                                                             ngrid_μ = 20, # used in double grid
@@ -481,7 +482,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         #ks = range(kmin, kmax, length = nk)
         #ks = exp.(range(log.(kmin), log.(kmax), length = nk))
         ks = 1 ./ (exp.(range(log.(1 ./ kmax .- 1), log.(1 ./ kmin .- 1), length = nk)) .+ 1)
-        D, μs, errs, σerrs = cvfit(x, y, ks, λ, figname = figname, nfold = nfold, seed = seed, prop_nknots = prop_nknots)
+        D, μs, errs, σerrs = cvfit(x, y, ks, λ, figname = figname, nfold = nfold, seed = seed, prop_nknots = prop_nknots, multi_fix_ratio = multi_fix_ratio)
     elseif method == "iter_search" #88
         verbose && @info "Smoothing Splines with iter-search: λ -> μ -> λ -> ... -> μ"
         iter = 0
@@ -1382,9 +1383,14 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}
 end
 
 # fix ratio
-function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, ks::AbstractVector{T}, λstar::Real; kw...) where T <: AbstractFloat
+function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, ks::AbstractVector{T}, λstar::Real; multi_fix_ratio = false, kw...) where T <: AbstractFloat
     @assert maximum(ks) < 1
-    return cvfit(x, y, hcat(1 ./ ks .- 1, λstar ./ ks); kw...)
+    paras = hcat(1 ./ ks .- 1, λstar ./ ks)
+    if multi_fix_ratio
+        @info "use multi_fix_ratio λstar = $λstar"
+        paras = vcat([hcat(1 ./ ks .- 1, λstar * s ./ ks) for s in 10.0 .^ (-1:0.2:0)]...)
+    end
+    return cvfit(x, y, paras; kw...)
 end
 
 """

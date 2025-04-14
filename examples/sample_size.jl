@@ -2,6 +2,7 @@
 using MonotoneDecomposition
 using Plots
 using LinearAlgebra
+using Random
 
 # ## With Cubic B-splines (`fitJ`)
 seed = 16
