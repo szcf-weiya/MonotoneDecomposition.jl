@@ -2,7 +2,9 @@
 using MonotoneDecomposition
 
 # prefer Gurobi if possible
-gurobi(1)
+# ```julia
+# gurobi(1)
+# ```
 
 # Candidate functions
 fs = ["x^2" "x^3" "exp(x)" "sigmoid" "SE_1" "SE_0.1" "Mat12_1" "Mat12_0.1" "Mat32_1" "Mat32_0.1" "RQ_0.1_0.5" "Periodic_0.1_4"]
