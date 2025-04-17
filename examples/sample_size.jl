@@ -10,6 +10,7 @@ ns = [20, 50, 100, 200, 500]
 
 Err1 = Float64[]
 Err2 = Float64[]
+μs = 10.0 .^ (-6:0.05:0)
 for n in ns
     Random.seed!(16)
     x, y, x0, y0 = gen_data(n, 0.5, "SE_1");

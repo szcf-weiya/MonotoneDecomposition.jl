@@ -118,10 +118,13 @@ function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
     @info "Benchmarking $f with $nrep repetitions"
     title = "$f (nrep = $nrep)"
     filename = "$f.sil"
+    nσ = length(σs)
+    arr_snrs = copy(snrs)
     if use_snr # use signal to noise ratio
         σs = [nothing for _ in snrs]
+    else
+        arr_snrs = vcat(arr_snrs, ones(max(0, nσ - length(snrs))))
     end
-    nσ = length(σs)
     res = zeros(nrep, 6, nσ)
     # res = SharedArray{Float64}(nrep, 4, nσ)
     if f == "x^3"
@@ -143,7 +146,7 @@ function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                                                         figname_fit = figname_fit,
                                                         nfold = nfold,
                                                         nλ = nλ,
-                                                        snr = snrs[j],
+                                                        snr = arr_snrs[j],
                                                         one_se_rule = one_se_rule,
                                                         method = competitor[4:end], 
                                                         rλ = rλ,
@@ -152,7 +155,7 @@ function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                 res[i, :, j] = benchmarking_cs(n, σ, f; figname_cv = figname_cv, 
                                                         figname_fit = figname_fit,
                                                         μs = μs, 
-                                                        snr = snrs[j],
+                                                        snr = arr_snrs[j],
                                                         one_se_rule = one_se_rule,
                                                         fixJ = !occursin("cvbspl2", competitor), kw...)
             end
