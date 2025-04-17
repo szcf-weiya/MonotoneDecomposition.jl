@@ -114,6 +114,7 @@ function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                             show_progress = true,
                             use_snr = false,
                             nλ = 20, rλ = 0.5, verbose = false,
+                            multi_fix_ratio = false,
                             kw...)
     @info "Benchmarking $f with $nrep repetitions"
     title = "$f (nrep = $nrep)"
@@ -150,6 +151,7 @@ function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                                                         one_se_rule = one_se_rule,
                                                         method = competitor[4:end], 
                                                         rλ = rλ,
+                                                        multi_fix_ratio = multi_fix_ratio,
                                                         verbose = verbose, kw...)
             else
                 res[i, :, j] = benchmarking_cs(n, σ, f; figname_cv = figname_cv, 

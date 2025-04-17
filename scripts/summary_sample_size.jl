@@ -19,6 +19,8 @@ resfolders = [
     "rocky/nrep100-nfold10-nlam1-1se_false-ss_single_lambda-2025-03-21T06_47_57+08_00-n500-snr_true"
 ]
 
+outputfolder = "~/Overleaf/paperMonoDecomp2/res/"
+
 function summary_sample_size(resfolders, method = "bspl")
     @assert occursin(method, resfolders[1])
     # Candidate functions
@@ -46,6 +48,6 @@ function summary_sample_size(resfolders, method = "bspl")
             title = latexstring(title)
         end
         fig = plot(ns, μerr, label = label, yerror = σerr, legend = :topright, xlab = L"n", ylab = "error", xticks = (ns, string.(ns)), title = title)
-        savefig(fig, "../res/sample_size/$(method)_$(fs[j]).pdf")
+        savefig(fig, "$outputfolder/sample_size/$(method)_$(fs[j]).pdf")
     end    
 end
