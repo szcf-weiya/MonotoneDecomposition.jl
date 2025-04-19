@@ -535,8 +535,8 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         end
         verbose && @info "Smoothing Splines with grid-search λ ∈ $λs, μ ∈ $μrange"
         D, μs, errs, σerrs = cvfit_gss(x, y, μrange, λs, nfold = nfold, figname = figname, seed = seed, tol = tol, 
-        tol_boundary = tol_boundary, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV,
-        log_scale = search_μ_in_log_scale, rerun_check = rerun_check)
+                                        tol_boundary = tol_boundary, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV,
+                                        log_scale = search_μ_in_log_scale, rerun_check = rerun_check)
     end
     μmin = D.μ
     λmin = D.λ
