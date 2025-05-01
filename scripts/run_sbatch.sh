@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
-timestamp=$(date -Iseconds)
+timestamp0=$(date -Iseconds)
+timestamp=${timestamp0//:/_}
 competitor=${1:-ss_singe_lambda}
 resfolder0=${2:-/tmp}
 nlam=${3:-20}

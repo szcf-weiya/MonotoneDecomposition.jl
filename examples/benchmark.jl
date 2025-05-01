@@ -60,7 +60,6 @@ benchmarking(
     resfolder = resfolder,
     verbose = false,
     show_progress = true,
-    # use_r_ss = true,
     multi_fix_ratio = true,
     rλs = 10.0 .^ (-1:0.05:0.1)
 )
