@@ -36,4 +36,7 @@ plot(Js, errs[:, 1], xlab = "J", ylab = "MSPE", label = "CS", markershape = :cir
 plot!(Js, errs[:, 2], label = "MDCS", markershape = :star5)
 Plots.vline!([D.workspace.J], ls = :dash, label = "CVCS")
 
+# Locally, I will save the figure and present in the paper.
+# ```julia
 # savefig("../res/demo/anylam-seed$seed.pdf")
+# ```
