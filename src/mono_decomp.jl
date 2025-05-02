@@ -169,6 +169,12 @@ function smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abstrac
     return rcopy(R"predict($spl, $x)$y"), rcopy(R"predict($spl, $xnew)$y"), Σ, λ, spl, B, coef
 end
 
+function smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::AbstractVector{T}, λ::Real) where T <: AbstractFloat
+    spl = R"smooth.spline($(x), $(y), lambda = $λ)"
+    yhat = rcopy(R"predict($spl, $(xnew))$y")
+    return yhat
+end
+
 function cv_smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, λs::AbstractVector{T}; nfold = 5, seed = rand(UInt64), one_se_rule = false, figname  = nothing) where T <: Real
     n = length(x)
     folds = div_into_folds(n, K = nfold, seed = seed)
@@ -178,8 +184,7 @@ function cv_smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, λs::Abstr
         test_idx = folds[k]
         train_idx = setdiff(1:n, test_idx)
         for (i, lam) in enumerate(λs)
-            spl = R"smooth.spline($(x[train_idx]), $(y[train_idx]), lambda = $lam)"
-            yhat = rcopy(R"predict($spl, $(x[test_idx]))$y")
+            yhat = smooth_spline(x[train_idx], y[train_idx], x[test_idx], lam)
             # for LOOCV, yhat is a scalar, while y[test_idx] is a vector, use `.-` can help
             errs[k, i] = norm(yhat .- y[test_idx])^2 / length(test_idx) 
         end
@@ -437,7 +442,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             minmaxμ = 1e-1,
                                                             include_boundary = false,
                                                             same_J_after_CV = false,
-                                                            λs_in_ss = 10.0 .^ (-16:0.25:2),
+                                                            λs_in_ss = 10.0 .^ (-8:0.25:1),
                                                             search_μ_in_log_scale = false,
                                                             rerun_check = false,
                                                             one_se_rule = false, 
@@ -1324,14 +1329,19 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, paras::AbstractMatrix
 end
 
 function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}, λ::AbstractVector{T}; 
-                    nfold = 10, figname = "/tmp/cv_curve.png", 
-                    seed = rand(UInt64), 
+                    nfold = 10, seed = rand(UInt64), 
+                    folds = nothing,
+                    figname = "/tmp/cv_curve.png", 
                     same_J_after_CV = true, 
                     prop_nknots = 1.0, 
                     include_boundary = false, 
                     strict = false) where T <: AbstractFloat
     n = length(x)
-    folds = div_into_folds(n, K = nfold, seed = seed)
+    if isnothing(folds)
+        folds = div_into_folds(n, K = nfold, seed = seed)
+    else
+        nfold = length(folds)
+    end
     nλ = length(λ)
     nμ = length(μ)
     err = zeros(nfold, nμ, nλ)
@@ -1342,7 +1352,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}
     # @showprogress "CV " for k = 1:nfold
     for k = 1:nfold
         test_idx = folds[k]
-        train_idx = setdiff(1:n, test_idx)
+        train_idx = vcat(folds[vcat(1:k-1, k+1:nfold)]...)
         if include_boundary ## see x^{1/3} in paper#12
             train_idx = union(il, train_idx, ir)
             test_idx = setdiff(1:n, train_idx)
@@ -1414,12 +1424,13 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
     μs = Float64[]
     errs = Float64[]
     σerrs = Float64[]
+    folds = div_into_folds(length(x), K = nfold, seed = seed)
     if log_scale
         a = log(μrange[1])
-        b = log(μrange[2])
+        b = log(μrange[end])
     else
         a = μrange[1]
-        b = μrange[2]
+        b = μrange[end]
     end
     μright = b
     δ = b - a # width of search region
@@ -1438,9 +1449,9 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
             μi = exp.(μi)
         end
         if λ_is_μ
-            D, μerr, σerr = cvfit(x, y, [λ], μi, nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV)
+            D, μerr, σerr = cvfit(x, y, [λ], μi, folds = folds, figname = ifigname, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV)
         else
-            D, μerr, σerr = cvfit(x, y, μi, [λ], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV)
+            D, μerr, σerr = cvfit(x, y, μi, [λ], folds = folds, figname = ifigname, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV)
         end
         append!(μs, μi)
         append!(errs, μerr)
@@ -1468,9 +1479,9 @@ function cvfit_gss(x::AbstractVector{T}, y::AbstractVector{T}, μrange::Abstract
                 try
                     @debug "rerun cvfit to check feasibility"
                     if λ_is_μ
-                        D, μerr, σerr = cvfit(x, y, [λ], μi, nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, strict = true, same_J_after_CV = same_J_after_CV)
+                        D, μerr, σerr = cvfit(x, y, [λ], μi, folds = folds, figname = ifigname, prop_nknots = prop_nknots, include_boundary = include_boundary, strict = true, same_J_after_CV = same_J_after_CV)
                     else
-                        D, μerr, σerr = cvfit(x, y, μi, [λ], nfold = nfold, figname = ifigname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, strict = true, same_J_after_CV = same_J_after_CV)
+                        D, μerr, σerr = cvfit(x, y, μi, [λ], folds = folds, figname = ifigname, prop_nknots = prop_nknots, include_boundary = include_boundary, strict = true, same_J_after_CV = same_J_after_CV)
                     end        
                 catch e
                     @debug "the found solution is not feasible after reruning optimization in the strict mode..."

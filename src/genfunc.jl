@@ -3,6 +3,7 @@ using Statistics
 using LinearAlgebra
 using Distributions
 using LaTeXStrings
+using Random
 sigmoid(x::Float64; a = 5.0) = 1 / (1 + exp(-a*x))
 
 """
@@ -22,6 +23,8 @@ Generate `n` data points `(xi, yi)` from curve `f` with noise level `σ`, i.e., 
 - for `σ`: the noise level
     - if `σ` is `nothing`, then `σ` is calculated to achieve given signal-to-noise ratio (`snr`)
 
+- if `seed` is not `nothing`, it ensures the same random function from Gaussian process, but it does not influence the random noises.
+
 # Returns 
 
 It returns four vectors, `x, y, x0, y0`, where
@@ -29,8 +32,12 @@ It returns four vectors, `x, y, x0, y0`, where
 - `x, y`: pair points of length `n`.
 - `x0, y0`: true curve without noise, represented by `k*n` points.
 """
-function gen_data(n::Int, σ::Union{Real, Nothing}, f::Union{Function, String}; k = 10, xmin = -1, xmax = 1, snr = 1.0)
-    x0 = sort(rand(k*n-(k-1)) * (xmax - xmin) .+ xmin)
+function gen_data(n::Int, σ::Union{Real, Nothing}, f::Union{Function, String}; k = 10, xmin = -1, xmax = 1, snr = 1.0, seed = nothing)
+    if isnothing(seed)
+        x0 = sort(rand(k*n-(k-1)) * (xmax - xmin) .+ xmin)
+    else
+        x0 = sort(rand(Xoshiro(seed+1), k*n-(k-1)) * (xmax - xmin) .+ xmin)
+    end
     if isa(f, Function)
         y0 = f.(x0)
     elseif occursin("MLP", f)
@@ -40,12 +47,14 @@ function gen_data(n::Int, σ::Union{Real, Nothing}, f::Union{Function, String}; 
         α = randn(M)
         y0 = [sum(w .* sigmoid.(α .+ 5z)) for z in x0]
     else
-        y0 = gp(x0, kernel = f)
+        y0 = gp(x0, kernel = f, seed = seed)
     end
     x = x0[1:k:end]
     if isnothing(σ)
         σ = sqrt(var(y0) / snr)
         @info "use σ = $σ to achieve SNR = $snr"
+    else
+        @info "σ = $σ, resulting SNR = $(var(y0) / σ^2)"
     end
     y = y0[1:k:end] + randn(n) * σ
     return x, y, x0, y0
@@ -71,7 +80,7 @@ The candidates of kernel `K` include SE, Mat12, Mat32, Mat52.
 
 See also: <https://stats.hohoweiya.xyz/2021/12/13/GP/>
 """
-function gp(x::AbstractVector{T}; kernel = "SE_0.1") where T <: AbstractFloat
+function gp(x::AbstractVector{T}; kernel = "SE_0.1", seed = nothing) where T <: AbstractFloat
     strs = split(kernel, "_")
     str_k = strs[1]
     str_ℓ = strs[2]
@@ -109,7 +118,11 @@ function gp(x::AbstractVector{T}; kernel = "SE_0.1") where T <: AbstractFloat
     end
     K = cov(Σ, reshape(x, 1, :))
     ϵ = sqrt(eps())
-    return rand(MvNormal(K + ϵ * 1.0I))
+    if isnothing(seed)
+        return rand(MvNormal(K + ϵ * 1.0I))
+    else
+        return rand(Xoshiro(seed), MvNormal(K + ϵ * 1.0I))
+    end
 end
 
 function gen_kern(x::AbstractVector{T}, ℓ::Real = 1) where T <: AbstractFloat
