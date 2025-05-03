@@ -49,25 +49,25 @@ pmap(
         show_progress = f == &quot;x^3&quot; # keep one progressbar
     ),
     fs[idxf]
-);</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">[ Info: Results are saved into /tmp/nrep1-nfold2-nlam1-1sefalse-ss_single_lambda-2025-05-02T16_23_50+00_00
+);</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">[ Info: Results are saved into /tmp/nrep1-nfold2-nlam1-1sefalse-ss_single_lambda-2025-05-03T06_50_21+00_00
 [ Info: Benchmarking x^2 with 1 repetitions
-[ Info: σ = 0.1, resulting SNR = 9.069324426245874
-[ Info: σ = 0.2, resulting SNR = 2.3218094213190508
-[ Info: σ = 0.4, resulting SNR = 0.562879880458199
-[ Info: σ = 0.5, resulting SNR = 0.37532337534892335
-[ Info: σ = 1.0, resulting SNR = 0.08680229708831642
-[ Info: σ = 1.5, resulting SNR = 0.03737947218432612
-[ Info: σ = 2.0, resulting SNR = 0.022454770745879125
+[ Info: σ = 0.1, resulting SNR = 9.124734452410856
+[ Info: σ = 0.2, resulting SNR = 2.368051262365274
+[ Info: σ = 0.4, resulting SNR = 0.5767455137937239
+[ Info: σ = 0.5, resulting SNR = 0.3511119998564668
+[ Info: σ = 1.0, resulting SNR = 0.0911734637991093
+[ Info: σ = 1.5, resulting SNR = 0.03971233282509224
+┌ Warning: the optimal is on the right boundary of λs
+└ @ MonotoneDecomposition ~/work/MonotoneDecomposition.jl/MonotoneDecomposition.jl/src/mono_decomp.jl:200
+[ Info: σ = 2.0, resulting SNR = 0.02264847156348041
 [ Info: Benchmarking x^3 with 1 repetitions
-[ Info: σ = 0.1, resulting SNR = 13.87359793118681
-[ Info: σ = 0.2, resulting SNR = 3.800849968892756
-x^3 (nrep = 1), iter = 1:  29%|███████▏                 |  ETA: 0:00:11[ Info: σ = 0.4, resulting SNR = 0.9085196205175231
-x^3 (nrep = 1), iter = 1:  43%|██████████▊              |  ETA: 0:00:08[ Info: σ = 0.5, resulting SNR = 0.5685269651309057
-x^3 (nrep = 1), iter = 1:  57%|██████████████▎          |  ETA: 0:00:06[ Info: σ = 1.0, resulting SNR = 0.1379963997132024
-x^3 (nrep = 1), iter = 1:  71%|█████████████████▉       |  ETA: 0:00:04[ Info: σ = 1.5, resulting SNR = 0.06178948861973235
+[ Info: σ = 0.1, resulting SNR = 14.080654958346955
+[ Info: σ = 0.2, resulting SNR = 3.043060298416267
+x^3 (nrep = 1), iter = 1:  29%|███████▏                 |  ETA: 0:00:10[ Info: σ = 0.4, resulting SNR = 0.9236522090290988
+x^3 (nrep = 1), iter = 1:  43%|██████████▊              |  ETA: 0:00:08[ Info: σ = 0.5, resulting SNR = 0.5406874093311401
+x^3 (nrep = 1), iter = 1:  57%|██████████████▎          |  ETA: 0:00:06[ Info: σ = 1.0, resulting SNR = 0.15560632761374799
+x^3 (nrep = 1), iter = 1:  71%|█████████████████▉       |  ETA: 0:00:04[ Info: σ = 1.5, resulting SNR = 0.06202823063330562
+x^3 (nrep = 1), iter = 1:  86%|█████████████████████▍   |  ETA: 0:00:02[ Info: σ = 2.0, resulting SNR = 0.034644599132219574
 ┌ Warning: the optimal is on the right boundary of λs
 └ @ MonotoneDecomposition ~/work/MonotoneDecomposition.jl/MonotoneDecomposition.jl/src/mono_decomp.jl:200
-x^3 (nrep = 1), iter = 1:  86%|█████████████████████▍   |  ETA: 0:00:02[ Info: σ = 2.0, resulting SNR = 0.03411316327729534
-┌ Warning: the optimal is on the right boundary of λs
-└ @ MonotoneDecomposition ~/work/MonotoneDecomposition.jl/MonotoneDecomposition.jl/src/mono_decomp.jl:200
-x^3 (nrep = 1), iter = 1: 100%|█████████████████████████| Time: 0:00:14</code></pre><div class="admonition is-success"><header class="admonition-header">run from command line</header><div class="admonition-body"><pre><code class="nohighlight hljs">julia examples/benchmark.jl ss_single_lambda /tmp 2 1 2 false</code></pre><p>You can also enable the debug mode to print more internal steps as follows</p><pre><code class="nohighlight hljs">JULIA_DEBUG=MonotoneDecomposition julia examples/benchmark.jl ss_single_lambda /tmp 2 1 2 false</code></pre></div></div><p>summary the results</p><pre><code class="language-julia hljs"># MonotoneDecomposition.summary(resfolder = resfolder, format = &quot;tex&quot;)</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../benchmark/">« Benchmarking</a><a class="docs-footer-nextpage" href="../../api/">API »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Friday 2 May 2025 16:30">Friday 2 May 2025</span>. Using Julia version 1.8.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+x^3 (nrep = 1), iter = 1: 100%|█████████████████████████| Time: 0:00:13</code></pre><div class="admonition is-success"><header class="admonition-header">run from command line</header><div class="admonition-body"><pre><code class="nohighlight hljs">julia examples/benchmark.jl ss_single_lambda /tmp 2 1 2 false</code></pre><p>You can also enable the debug mode to print more internal steps as follows</p><pre><code class="nohighlight hljs">JULIA_DEBUG=MonotoneDecomposition julia examples/benchmark.jl ss_single_lambda /tmp 2 1 2 false</code></pre></div></div><p>summary the results</p><pre><code class="language-julia hljs"># MonotoneDecomposition.summary(resfolder = resfolder, format = &quot;tex&quot;)</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../benchmark/">« Benchmarking</a><a class="docs-footer-nextpage" href="../../api/">API »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Saturday 3 May 2025 06:56">Saturday 3 May 2025</span>. Using Julia version 1.8.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
