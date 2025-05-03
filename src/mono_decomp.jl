@@ -601,6 +601,107 @@ function _optim(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T},
     return _optim(y, J, B, H, L, λs, μs, del_constraint = del_constraint)
 end
 
+@inline function _optim2(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T}, 
+                H::AbstractMatrix{Int}, L::AbstractMatrix{T}, 
+                λs::AbstractVector{T}, μs::AbstractVector{T};
+                del_constraint = true,
+                strict = false,
+                γstart = zeros(2J),
+                ) where T <: AbstractFloat
+    model = Model(OPTIMIZER)
+    set_silent(model)
+    # TODO: test the speed and possibly switch to it if necessary, as in _optim!
+    # set_optimizer_attribute(model, "BarHomogeneous", 1) # use only in demo since practically if a numerical error occurs, although it can be solved by another method, but it also implies that the current parameter is not the best
+    # set_optimizer_attribute(model, "max_iter", 10000)
+    @variable(model, γ[1:2J])
+    @variable(model, z)
+    @constraint(model, c1, H * γ .<= 0)
+    m = length(λs)
+    γhats = zeros(2J, m)
+    if del_constraint
+        @objective(model, Min, z)
+        soc_constraint = ConstraintRef[]
+        set_start_value.(γ, γstart)
+        sγ = @expression(model, γ[1:J] + γ[J+1:2J])
+        dγ = @expression(model, γ[1:J] - γ[J+1:2J])
+        soc1 = @expression(model, y - B * sγ)
+        soc2 = @expression(model, L' * sγ)
+        soc3 = @expression(model, B * dγ)
+        for i in 1:m
+            λ = λs[i]
+            μ = μs[i]
+            for con in soc_constraint
+                delete(model, con)
+            end
+            empty!(soc_constraint)
+            con = @constraint(model, [z; vcat(soc1, 
+                                        sqrt(λ) * soc2, 
+                                        sqrt(μ) * soc3
+                                        ) ] in SecondOrderCone() )
+            push!(soc_constraint, con)
+            if i > 1
+                set_start_value.(γ, γhats[:, i-1])
+            end
+            JuMP.optimize!(model)
+            status = termination_status(model)
+            # obj_val = objective_value(model)
+            # println("i = $i, obj_val = $obj_val")
+            if status == MOI.NUMERICAL_ERROR
+                @debug "$status"
+                strict && error(status)
+                γhats[:, i] .= mean(y) / 2
+            else
+                if !(status in OK_STATUS)
+                    @debug "$status"
+                    strict && error(status)
+                end
+                try
+                    γhats[:, i] .= value.(γ)
+                catch e
+                    @warn e 
+                    ts = strip(read(`date -Iseconds`, String))
+                    serialize("bug_$(ts).sil", [y, J, B, H, L, λs, μs, i, status])    
+                    γhats[:, i] .= mean(y) / 2
+                end
+            end
+        end
+    else
+        @variable(model, λ)
+        @variable(model, μ)
+        @constraint(model, c3, [z; vcat(y - B * (γ[1:J] + γ[J+1:2J]), 
+                                # sqrt(λ) * L' * (γ[1:J] + γ[J+1:2J]), 
+                                λ * L' * (γ[1:J] + γ[J+1:2J]), 
+                                # sqrt(μ) * B * (γ[1:J] - γ[J+1:2J]) 
+                                μ * B * (γ[1:J] - γ[J+1:2J]) 
+                                ) ] in SecondOrderCone() )
+        for i = 1:m
+            JuMP.fix(λ, sqrt(λs[i]))
+            JuMP.fix(μ, sqrt(μs[i]))
+            JuMP.optimize!(model)
+            status = termination_status(model)
+            obj_val = objective_value(model)
+            # println("i = $i, obj_val = $obj_val")
+            if status == MOI.NUMERICAL_ERROR
+                @debug "$status"
+                strict && error(status)
+                γhats[:, i] .= mean(y) / 2
+            else
+                if !(status in OK_STATUS)
+                    @debug "$status"
+                    strict && error(status)
+                end
+                γhats[:, i] .= value.(γ)
+            end
+        end
+    end
+    # model = nothing
+    # GC.gc(); GC.gc();
+    # GC.gc(); GC.gc();
+    #finalize(ecos)
+    return γhats
+end
+
+
 @inline function _optim(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T}, 
                 H::AbstractMatrix{Int}, L::AbstractMatrix{T}, 
                 λs::AbstractVector{T}, μs::AbstractVector{T};
@@ -1360,7 +1461,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}
         workspace = WorkSpaceSS()
         build_model!(workspace, x[train_idx], prop_nknots = prop_nknots)
         γhats = try
-            _optim(y[train_idx], workspace.J, workspace.B, workspace.H, workspace.L, λs, μs, strict = strict)
+            _optim2(y[train_idx], workspace.J, workspace.B, workspace.H, workspace.L, λs, μs, strict = strict)
         catch e
             error(e)
         end

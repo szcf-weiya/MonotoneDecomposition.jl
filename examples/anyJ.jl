@@ -31,8 +31,13 @@ end
 D, _ = cv_mono_decomp_cs(x, y, Js = Js, ss = 10.0 .^ (-6:0.05:0))
 D.workspace.J
 
+# save results 
+# ```julia
+# serialize("../res/demo/anyJ-seed$seed.sil", [Js, errs, D.workspace.J])
+# ```
+
 # plot the mean squared prediction error (MSPE) along the number of basis function $J$:
-plot(Js, errs[:, 1], xlab = "J", ylab = "MSPE", label = "CS", markershape = :circle)
+plot(Js, errs[:, 1], xlab = "J", ylab = "MSPE", label = "CS", markershape = :circle, legend = :topleft)
 plot!(Js, errs[:, 2], label = "MDCS", markershape = :star5)
 Plots.vline!([D.workspace.J], ls = :dash, label = "CVCS")
 
