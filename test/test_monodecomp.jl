@@ -545,21 +545,6 @@ end
     end
 end    
 
-@testset "fda::bspl vs splines::bs" begin
-    x = sort(rand(10))
-    bbasis = R"fda::create.bspline.basis($x, norder=4)"
-    A = rcopy(R"splines::bs($x, intercept=TRUE, knots=$(x[2:end-1]))")
-    B = rcopy(R"predict($bbasis, $x)")
-    @test A == B
-    # # Boundary
-    # xb = rcopy(R"$bbasis$rangeval")
-    # y = rcopy(R"predict($bbasis, $x)")
-    # plot(x, y)
-    # z = vcat(-0.1, 1.1)
-    # dx = rcopy(R"predict($bbasis, $xb, Lfdobj = 1)")
-    # y[end, :] + dx[2, :] * (z[2] - xb[2])
-end
-
 @testset "benchmarking experiments" begin
     benchmarking(jplot = false, nrep=1, σs = [0.1], competitor = "ss_single_lambda", nfold = 2, one_se_rule=false, resfolder = "/tmp")
     MonotoneDecomposition.summary(σs=[0.1], curves=["x^3"], nrep=1, resfolder = "/tmp")

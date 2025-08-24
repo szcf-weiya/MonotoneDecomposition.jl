@@ -447,6 +447,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             rerun_check = false,
                                                             one_se_rule = false, 
                                                             one_se_rule_pre = false, 
+                                                            argmin_with_tol = 0,
                                                             use_r_ss = false,
                                                             kw...) where T <: AbstractFloat
     if use_r_ss
@@ -531,6 +532,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         end
         @debug "grid search λ in $λs"
         μs = exp.(range(log(μrange[1]), log(μrange[2]), length = ngrid_μ))
+        @info "μs = $μs"
         D, errs, σerrs = cvfit(x, y, μs, λs, nfold = nfold, figname = figname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV)
     else # grid_search
         if isnothing(rλs)
@@ -558,6 +560,20 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         @debug "use 1se rule: before 1se: μ = $μmin; after 1se: μ = $μopt"
         @debug "use 1se rule: before 1se: λ = $λmin; after 1se: λ = $λopt"
         # workspace has been defined, so J would be inherited regardless of prop_nknots
+        D = mono_decomp_ss(D.workspace, x, y, λopt, μopt) 
+    end
+    if argmin_with_tol > 0
+        if isa(errs, Matrix)
+            ind = cv_one_se_rule(errs, ones(size(errs)) * argmin_with_tol, small_is_simple = [false, false])
+            μopt = μs[ind[1]]
+            λopt = λs[ind[2]]
+        else
+            ind = cv_one_se_rule(errs, ones(size(errs)) * argmin_with_tol, small_is_simple = false)
+            μopt = μs[ind]
+            λopt = λmin
+        end
+        @debug "use argmin_with_tol = $argmin_with_tol: μ = $μmin -> $μopt"
+        @debug "use argmin_with_tol = $argmin_with_tol: λ = $λmin -> $λopt"
         D = mono_decomp_ss(D.workspace, x, y, λopt, μopt) 
     end
     return D, μmin, μs, errs, σerrs, yhat, yhatnew, γss
@@ -1020,7 +1036,6 @@ function predict(W::WorkSpaceSS, xnew::AbstractVector, γhat::AbstractVecOrMat)
     end
     boundaries = W.Bend * γhat
     slopes = W.Bendd * γhat
-
     # extrapolation
     # derivative at endpoints
     if isa(γhat, AbstractVector)
