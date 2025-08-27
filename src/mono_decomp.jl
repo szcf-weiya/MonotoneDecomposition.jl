@@ -463,6 +463,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                 one_se_rule = one_se_rule_pre, 
                                                 figname = isnothing(figname) ? figname : figname[1:end-4] * "_ss.png")
     end
+    λs = [λ]
     @debug "λopt in ss = $λ"
     yhatnew = rcopy(R"predict($spl, $x0)$y")
     γup, γdown = mono_decomp(γss)
