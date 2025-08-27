@@ -197,8 +197,13 @@ function summary(;nλ = 20,
     titles = curves
     # titles to display
     dtitles = copy(titles)
-    if length(titles) > 2
-        dtitles[1:3] = [L"x^2" L"x^3" L"\exp(x)"]
+    for i in 1:length(dtitles)
+        if dtitles[i] in ["x^2", "x^3"]
+            dtitles[i] = latexstring(dtitles[i])
+        end
+        if dtitles[i] == "exp(x)"
+            dtitles[i] = L"\exp(x)"
+        end
     end
     ntitle = length(titles)
     @info "summarize result $resfolder in $format format"

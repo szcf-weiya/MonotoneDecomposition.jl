@@ -170,8 +170,14 @@ function smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abstrac
 end
 
 function smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::AbstractVector{T}, λ::Real) where T <: AbstractFloat
-    spl = R"smooth.spline($(x), $(y), lambda = $λ)"
-    yhat = rcopy(R"predict($spl, $(xnew))$y")
+    yhat = try
+        spl = R"smooth.spline($(x), $(y), lambda = $λ)"
+        rcopy(R"predict($spl, $(xnew))$y")     
+    catch e
+        @info "$e"
+        @info "using the mean(y) as the prediction"
+        mean(y) * ones(length(xnew))
+    end
     return yhat
 end
 
@@ -532,7 +538,6 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         end
         @debug "grid search λ in $λs"
         μs = exp.(range(log(μrange[1]), log(μrange[2]), length = ngrid_μ))
-        @info "μs = $μs"
         D, errs, σerrs = cvfit(x, y, μs, λs, nfold = nfold, figname = figname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV)
     else # grid_search
         if isnothing(rλs)
@@ -576,7 +581,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         @debug "use argmin_with_tol = $argmin_with_tol: λ = $λmin -> $λopt"
         D = mono_decomp_ss(D.workspace, x, y, λopt, μopt) 
     end
-    return D, μmin, μs, errs, σerrs, yhat, yhatnew, γss
+    return D, μmin, μs, errs, σerrs, yhat, yhatnew, γss, λs
 end
 
 
@@ -995,11 +1000,14 @@ end
 Predict `yup` and `ydown` at `xnew` given workspace `W` and decomposition coefficients `γup` and `γdown`.
 """
 function predict(W::WorkSpaceSS, xnew::AbstractVector, γup::AbstractVector, γdown::AbstractVector)
-    xm = (xnew .- W.mx) ./ W.rx
-    # evaluate on the whole dataset, so all should be in the middle
-    @assert all(0 .<= xm .<= 1)
-    Bnew = rcopy(R"splines::bs($xm, intercept = TRUE, knots=$(W.knots[2:end-1]), Boundary.knots = c(0, 1))")
-    return Bnew * γup, Bnew * γdown
+    # xm = (xnew .- W.mx) ./ W.rx
+    # # evaluate on the whole dataset, so all should be in the middle
+    # @assert all(0 .<= xm .<= 1)
+    # Bnew = rcopy(R"splines::bs($xm, intercept = TRUE, knots=$(W.knots[2:end-1]), Boundary.knots = c(0, 1))")
+    # return Bnew * γup, Bnew * γdown
+    yup = predict(W, xnew, γup)
+    ydown = predict(W, xnew, γdown)
+    return yup, ydown
 end
 
 function predict(W::WorkSpaceCS, xnew::AbstractVector, γup::AbstractVector, γdown::AbstractVector)
@@ -1078,7 +1086,7 @@ function plot(obs::AbstractVector{T}, truth::AbstractVector{T}, D::MonoDecomp, o
     x0, y0 = truth
     @assert x[1] <= x[2] <= x[3] # assume it has been sorted
     @assert x0[1] <= x0[2] <= x0[3]
-    yup, ydown = predict(D.workspace, x0, D.γup, D.γdown)
+    yup, ydown = predict(D.workspace, x0, D.γup, D.γdown)    
     e1 = round(norm(yup + ydown - y0)^2 / length(y0), digits = digits)
     e2 = round(norm(other - y0)^2 / length(y0), digits = digits)
     adjust_hat_in_latex = ""

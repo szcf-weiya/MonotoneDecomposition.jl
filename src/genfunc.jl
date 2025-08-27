@@ -32,7 +32,7 @@ It returns four vectors, `x, y, x0, y0`, where
 - `x, y`: pair points of length `n`.
 - `x0, y0`: true curve without noise, represented by `k*n` points.
 """
-function gen_data(n::Int, σ::Union{Real, Nothing}, f::Union{Function, String}; k = 10, xmin = -1, xmax = 1, snr = 1.0, seed = nothing)
+function gen_data_old(n::Int, σ::Union{Real, Nothing}, f::Union{Function, String}; k = 10, xmin = -1, xmax = 1, snr = 1.0, seed = nothing)
     if isnothing(seed)
         x0 = sort(rand(k*n-(k-1)) * (xmax - xmin) .+ xmin)
     else
@@ -57,8 +57,38 @@ function gen_data(n::Int, σ::Union{Real, Nothing}, f::Union{Function, String}; 
         @info "σ = $σ, resulting SNR = $(var(y0) / σ^2)"
     end
     y = y0[1:k:end] + randn(n) * σ
-    return x, y, x0, y0
-    #return x, y, x0[2:2:end], y0[2:2:end] # to reduce evaluation cost
+    return x, y, x0, y0, σ, snr
+    #return x, y, deleteat!(x0, 1:k:length(x0)), deleteat!(y0, 1:k:length(x0)), σ, snr
+end
+
+function gen_data(n::Int, σ::Union{Real, Nothing}, f::Union{Function, String}; K = 100, k = 10, xmin = -1, xmax = 1, snr = 1.0, seed = nothing)
+    if isnothing(seed)
+        x0 = sort(rand(K*n) * (xmax - xmin) .+ xmin)
+    else
+        x0 = sort(rand(Xoshiro(seed+1), K*n) * (xmax - xmin) .+ xmin)
+    end
+    if isa(f, Function)
+        y0 = f.(x0)
+    elseif occursin("MLP", f)
+        M = parse(Int, split(f, '_')[2])
+        w = rand(M)
+        w = w / sum(w)
+        α = randn(M)
+        y0 = [sum(w .* sigmoid.(α .+ 5z)) for z in x0]
+    else
+        y0 = gp(x0, kernel = f, seed = seed)
+    end
+    idx_train = sort(sample(1:K*n, n, replace = false))
+    idx_test  = sort(sample(1:K*n, k*n, replace = false))
+    x = x0[idx_train]
+    if isnothing(σ)
+        σ = sqrt(var(y0) / snr)
+        @info "use σ = $σ to achieve SNR = $snr"
+    else
+        @info "σ = $σ, resulting SNR = $(var(y0) / σ^2)"
+    end
+    y = y0[idx_train] + randn(n) * σ
+    return x, y, x0[idx_test], y0[idx_test], σ, snr
 end
 
 # mutable struct MLP1{T <: AbstractFloat}
