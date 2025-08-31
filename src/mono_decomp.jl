@@ -276,9 +276,9 @@ cubic_spline(J) = (x, y, xnew) -> cubic_spline(x, y, xnew; J = J)
 B-spline fitting with `nfold` CV-tuned `J` from `Js`.
 """
 function cv_cubic_spline(x::AbstractVector{T}, y::AbstractVector{T}, xnew::AbstractVector{T}; 
-                    nfold = 10, Js = 4:50, one_se_rule = false, figname = nothing) where T <: AbstractFloat
+                    nfold = 10, Js = 4:50, seed = rand(UInt64), one_se_rule = false, figname = nothing) where T <: AbstractFloat
     n = length(x)
-    folds = div_into_folds(n, K = nfold, seed = rand(UInt64))
+    folds = div_into_folds(n, K = nfold, seed = seed)
     errs = zeros(nfold, length(Js))
     for k = 1:nfold
         test_idx = folds[k]
@@ -323,9 +323,10 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abs
                                 nfold = 10, Js = 4:50, 
                                 ss = 10.0 .^ (-6:0.1:-1), 
                                 s_is_μ = true, figname = nothing, 
+                                seed = rand(UInt64),
                                 one_se_rule = false, use_GI = false) where T <: AbstractFloat
     n = length(x)
-    folds = div_into_folds(n, K = nfold, seed = rand(UInt64))
+    folds = div_into_folds(n, K = nfold, seed = seed)
     errs = zeros(nfold, length(Js), length(ss))
     n2 = length(folds[1])
     n1 = n - n2
@@ -381,6 +382,7 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}; ss = 10.0
                                                             fixJ = true,
                                                             x0 = x,
                                                             Js = 4:50,
+                                                            seed = rand(UInt64),
                                                             one_se_rule = false,
                                                             use_GI = false, # currently only for single μ
                                                             one_se_rule_pre = false)::Tuple{MonoDecomp{T}, T, Array{T}, Array{T}} where T <: AbstractFloat
@@ -398,9 +400,9 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}; ss = 10.0
             J, _ = cv_cubic_spline(x, y, x0, one_se_rule = one_se_rule_pre, nfold = nfold_pre, Js = Js,
                                                 figname = isnothing(figname) ? figname : figname[1:end-4] * "_bspl.png")
         end
-        return cv_mono_decomp_cs(x, y, x0, Js = J:J, ss = ss, figname = figname, nfold = nfold, one_se_rule = one_se_rule, use_GI = use_GI)
+        return cv_mono_decomp_cs(x, y, x0, Js = J:J, ss = ss, figname = figname, nfold = nfold, one_se_rule = one_se_rule, use_GI = use_GI, seed = seed)
     else
-        return cv_mono_decomp_cs(x, y, x0, ss = ss, Js = Js, figname = figname, nfold = nfold, one_se_rule = one_se_rule, use_GI = use_GI)
+        return cv_mono_decomp_cs(x, y, x0, ss = ss, Js = Js, figname = figname, nfold = nfold, one_se_rule = one_se_rule, use_GI = use_GI, seed = seed)
     end
 end
 

@@ -20,14 +20,15 @@ function benchmarking_cs(n::Int = 100, σ::Union{Real, Nothing} = 0.5, f::Union{
                                                                                snr = 1.0,
                                                                                nfold = 10,
                                                                                one_se_rule = false,
+                                                                               seed = rand(UInt64),
                                                                                μs = 10.0 .^ (-6:0.5:0), kw...)
     x, y, x0, y0 = gen_data(n, σ, f, snr = snr)
     # J is determined from cubic_spline (deprecated the choice of arbitrary J)
-    J, yhat, yhatnew = cv_cubic_spline(x, y, x0, nfold = nfold, one_se_rule = one_se_rule)
+    J, yhat, yhatnew = cv_cubic_spline(x, y, x0, nfold = nfold, one_se_rule = one_se_rule, seed = seed)
     if fixJ
         Js = J:J
     end
-    D, _ = cv_mono_decomp_cs(x, y, x0, Js = Js, ss = μs, figname = figname_cv, nfold = nfold, one_se_rule = one_se_rule)
+    D, _ = cv_mono_decomp_cs(x, y, x0, Js = Js, ss = μs, figname = figname_cv, nfold = nfold, one_se_rule = one_se_rule, seed = seed)
     err = [norm(D.yhat - y)^2 / length(y), norm(predict(D, x0) - y0)^2 / length(y0), 
            norm(yhat - y)^2 / length(y), norm(yhatnew - y0)^2 / length(y0),
            var(y), var(y0)]
