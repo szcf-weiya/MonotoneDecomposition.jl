@@ -58,7 +58,7 @@ function gen_data(n::Int, σ::Union{Real, Nothing}, f::Union{Function, String}; 
     end
     y = y0[1:k:end] + randn(n) * σ
     # return x, y, x0, y0, σ, snr
-    return x, y, deleteat!(x0, 1:k:length(x0)), deleteat!(y0, 1:k:length(y0)), σ, snr
+    return x, y, deleteat!(copy(x0), 1:k:length(x0)), deleteat!(copy(y0), 1:k:length(y0)), σ, snr
 end
 
 function gen_data2(n::Int, σ::Union{Real, Nothing}, f::Union{Function, String}; K = 100, k = 10, xmin = -1, xmax = 1, snr = 1.0, seed = nothing)
