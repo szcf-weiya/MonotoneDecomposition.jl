@@ -213,7 +213,13 @@ function cv_smooth_spline(x::AbstractVector{T}, y::AbstractVector{T}, λs::Abstr
         serialize(figname[1:end-4] * ".sil", [μerr, σerr, λs, nfold, ind])
         savefig(cvplot(μerr, σerr, λs, nfold = nfold, ind0 = ind, lbl = "\\lambda"), figname)
     end
-    spl = R"smooth.spline($x, $y, lambda = $optlam, keep.stuff = TRUE)"
+    spl = try
+        R"smooth.spline($x, $y, lambda = $optlam, keep.stuff = TRUE)"
+    catch e
+        @info e
+        @info "use default smooth.spline without specifying lambda since the error occurs at $optlam"
+        R"smooth.spline($x, $y, keep.stuff = TRUE)"
+    end
     Σ = recover(rcopy(R"$spl$auxM$Sigma"))
     knots = rcopy(R"$spl$fit$knot")[4:end-3]
     bbasis = R"fda::create.bspline.basis(breaks = $knots, norder = 4)"

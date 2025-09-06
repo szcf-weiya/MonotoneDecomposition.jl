@@ -32,7 +32,7 @@ It returns four vectors, `x, y, x0, y0`, where
 - `x, y`: pair points of length `n`.
 - `x0, y0`: true curve without noise, represented by `k*n` points.
 """
-function gen_data_old(n::Int, σ::Union{Real, Nothing}, f::Union{Function, String}; k = 10, xmin = -1, xmax = 1, snr = 1.0, seed = nothing)
+function gen_data(n::Int, σ::Union{Real, Nothing}, f::Union{Function, String}; k = 10, xmin = -1, xmax = 1, snr = 1.0, seed = nothing)
     if isnothing(seed)
         x0 = sort(rand(k*n-(k-1)) * (xmax - xmin) .+ xmin)
     else
@@ -57,11 +57,11 @@ function gen_data_old(n::Int, σ::Union{Real, Nothing}, f::Union{Function, Strin
         @info "σ = $σ, resulting SNR = $(var(y0) / σ^2)"
     end
     y = y0[1:k:end] + randn(n) * σ
-    return x, y, x0, y0, σ, snr
-    #return x, y, deleteat!(x0, 1:k:length(x0)), deleteat!(y0, 1:k:length(x0)), σ, snr
+    # return x, y, x0, y0, σ, snr
+    return x, y, deleteat!(x0, 1:k:length(x0)), deleteat!(y0, 1:k:length(y0)), σ, snr
 end
 
-function gen_data(n::Int, σ::Union{Real, Nothing}, f::Union{Function, String}; K = 100, k = 10, xmin = -1, xmax = 1, snr = 1.0, seed = nothing)
+function gen_data2(n::Int, σ::Union{Real, Nothing}, f::Union{Function, String}; K = 100, k = 10, xmin = -1, xmax = 1, snr = 1.0, seed = nothing)
     if isnothing(seed)
         x0 = sort(rand(K*n) * (xmax - xmin) .+ xmin)
     else
