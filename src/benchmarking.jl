@@ -24,7 +24,7 @@ function benchmarking_cs(n::Int = 100, σ::Union{Real, Nothing} = 0.5, f::Union{
                                                                                μs = 10.0 .^ (-6:0.5:0), kw...)
     x, y, x0, y0 = gen_data(n, σ, f, snr = snr)
     # J is determined from cubic_spline (deprecated the choice of arbitrary J)
-    J, yhat, yhatnew = cv_cubic_spline(x, y, x0, nfold = nfold, one_se_rule = one_se_rule, seed = seed)
+    J, yhat, yhatnew = cv_cubic_spline(x, y, x0, nfold = nfold, one_se_rule = one_se_rule, seed = seed, Js = Js)
     if fixJ
         Js = J:J
     end
