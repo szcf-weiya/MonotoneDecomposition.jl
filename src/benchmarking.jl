@@ -20,8 +20,10 @@ function benchmarking_cs(n::Int = 100, σ::Union{Real, Nothing} = 0.5, f::Union{
                                                                                snr = 1.0,
                                                                                nfold = 10,
                                                                                one_se_rule = false,
-                                                                               seed = rand(UInt64),
+                                                                               seed = 1,
+                                                                               dataseed = 1,
                                                                                μs = 10.0 .^ (-6:0.5:0), kw...)
+    Random.seed!(dataseed)
     x, y, x0, y0 = gen_data(n, σ, f, snr = snr)
     # J is determined from cubic_spline (deprecated the choice of arbitrary J)
     J, yhat, yhatnew = cv_cubic_spline(x, y, x0, nfold = nfold, one_se_rule = one_se_rule, seed = seed, Js = Js)
@@ -61,13 +63,17 @@ function benchmarking_ss(n::Int = 100, σ::Union{Real, Nothing} = 0.5,
                                 nfold = 5, one_se_rule = true,
                                 method = "single_lambda",
                                 figname_cv = nothing,
-                                figname_fit = nothing, kw...
+                                figname_fit = nothing, 
+                                seed = 1,
+                                dataseed = 1, kw...
                         )
+    Random.seed!(dataseed)
     x, y, x0, y0 = gen_data(n, σ, f, snr = snr)
     D, μopt, μs, errs, σerrs, yhat, yhatnew = cv_mono_decomp_ss(x, y; x0 = x0,
                                                                 figname = figname_cv,
                                                                 nfold = nfold,
                                                                 method = method,
+                                                                seed = seed,
                                                                 one_se_rule = one_se_rule, kw...)
     if !isnothing(figname_fit)
         savefig(
@@ -153,6 +159,7 @@ function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                                                         method = competitor[4:end], 
                                                         rλ = rλ,
                                                         multi_fix_ratio = multi_fix_ratio,
+                                                        dataseed = i,
                                                         verbose = verbose, kw...)
             else
                 res[i, :, j] = benchmarking_cs(n, σ, f; figname_cv = figname_cv, 
@@ -161,6 +168,7 @@ function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                                                         nfold = nfold,
                                                         snr = arr_snrs[j],
                                                         one_se_rule = one_se_rule,
+                                                        dataseed = i,
                                                         fixJ = !occursin("cvbspl2", competitor), kw...)
             end
             next!(p)

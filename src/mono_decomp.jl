@@ -503,7 +503,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         #ks = range(kmin, kmax, length = nk)
         #ks = exp.(range(log.(kmin), log.(kmax), length = nk))
         ks = 1 ./ (exp.(range(log.(1 ./ kmax .- 1), log.(1 ./ kmin .- 1), length = nk)) .+ 1)
-        D, μs, errs, σerrs = cvfit(x, y, ks, λ, figname = figname, nfold = nfold, seed = seed, prop_nknots = prop_nknots, multi_fix_ratio = multi_fix_ratio)
+        D, μs, errs, σerrs = cvfit(x, y, ks, λ, figname = figname, nfold = nfold, seed = seed, prop_nknots = prop_nknots, multi_fix_ratio = multi_fix_ratio, same_J_after_CV = same_J_after_CV)
     elseif method == "iter_search" #88
         verbose && @info "Smoothing Splines with iter-search: λ -> μ -> λ -> ... -> μ"
         iter = 0
@@ -881,7 +881,7 @@ function _optim!(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T}, s::Union{No
         end
     else
         if !isnothing(λ)
-            @constraint(model, c3, [z; vcat(y - B * (γ[1:J] + γ[J+1:2J]), sqrt(λ) * L' * (γ[1:J] + γ[J+1:2J]), sqrt(abs(μ)) * B * (γ[1:J] - γ[J+1:2J]) ) ] in SecondOrderCone() )
+            @constraint(model, c3, [z; vcat(y - B * (γ[1:J] + γ[J+1:2J]), sqrt(λ) * L' * (γ[1:J] + γ[J+1:2J]), sqrt(μ) * B * (γ[1:J] - γ[J+1:2J]) ) ] in SecondOrderCone() )
         else
             @constraint(model, c3, [z; vcat(y - B * (γ[1:J] + γ[J+1:2J]), sqrt(μ) * B * (γ[1:J] - γ[J+1:2J]) ) ] in SecondOrderCone() )
         end
@@ -1123,9 +1123,9 @@ function plot(obs::AbstractVector{T}, truth::AbstractVector{T}, D::MonoDecomp, o
     lbls = [L"\hat{%$adjust_hat_in_latex f}_u", 
             L"\hat{%$adjust_hat_in_latex f}_d", 
             latexstring("\$\\hat{$adjust_hat_in_latex f}_u+\\hat{$adjust_hat_in_latex f}_d ($e1)\$"), L"f"]
-    plot!(fig, x0, yup, label = "", ls = :dot)
+    # plot!(fig, x0, yup, label = "", ls = :dot)
     N = length(x0)
-    plot!(fig, x0[1:20:N], yup[1:20:N], label = lbls[1], ls = :dot, markershape = :+, markersize = 2)
+    plot!(fig, x0[1:15:N], yup[1:15:N], label = lbls[1], ls = :dot, markershape = :+, markersize = 2)
     plot!(fig, x0, ydown, label = lbls[2], ls = :dot)
     plot!(fig, x0, yup + ydown, 
             # label = L"\hat y_u + \hat y_d", 
@@ -1227,7 +1227,7 @@ function cvplot(μerr::AbstractVector{T}, σerr::Union{Nothing, AbstractVector{T
                 lbl = ""
             end
         else
-            f = x -> log10(x)
+            f = x -> log10(x + eps())
             lbl = add_log_str(lbl)
         end
     end
@@ -1528,10 +1528,14 @@ end
 # fix ratio
 function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, ks::AbstractVector{T}, λstar::Real; multi_fix_ratio = false, kw...) where T <: AbstractFloat
     @assert maximum(ks) < 1
+    # include ss itself
+    ks = vcat(1, ks) # provide an option that, if the cv error is not better enough, do not add md
+    ## but it should be only for prediction, if we want the decomposition, the solution is not guarantee
+    @info "k = 1 is considered"
     paras = hcat(1 ./ ks .- 1, λstar ./ ks)
     if multi_fix_ratio
         @info "use multi_fix_ratio λstar = $λstar"
-        paras = vcat([hcat(1 ./ ks .- 1, λstar * s ./ ks) for s in 10.0 .^ (-1:0.2:0)]...)
+        paras = vcat([hcat(1 ./ ks .- 1, λstar * s ./ ks) for s in 10.0 .^ (-0.5:0.1:0)]...)
     end
     return cvfit(x, y, paras; kw...)
 end
