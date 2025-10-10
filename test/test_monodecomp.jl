@@ -550,25 +550,24 @@ end
     MonotoneDecomposition.summary(σs=[0.1], curves=["x^3"], nrep=1, resfolder = "/tmp")
     @test isfile("/tmp/tmp.tex")
     @testset "cubic splines" begin
-        Random.seed!(1234)
-        res = benchmarking_cs(fixJ = false, figname_cv="/tmp/cv.png", figname_fit="/tmp/fit.png")
+        res = benchmarking_cs(fixJ = false, figname_cv="/tmp/cv.png", figname_fit="/tmp/fit.png", dataseed = 1234)
         @test isfile("/tmp/cv_Jmu.sil")
         savefig(cvplot("/tmp/cv_Jmu.sil", "bspl2"), "/tmp/cv2.png")
         @test isfile("/tmp/cv2.png")
         
         @test res[2] < res[4]
         
-        Random.seed!(1234)
-        res = benchmarking_cs(fixJ = true)            
+        res = benchmarking_cs(fixJ = true, dataseed = 1234)
         @test res[2] < res[4]
     end
     @testset "smoothing splines" begin
         for one_se_rule in [false, true]
             for method in ["single_lambda", "fix_ratio", "grid_search"]#, "iter_search"]
-                Random.seed!(1234)
-                res = benchmarking_ss(method = method, one_se_rule = one_se_rule, 
+                res = benchmarking_ss(100, nothing, method = method, one_se_rule = one_se_rule, 
                                         one_se_rule_pre = one_se_rule,
                                         nfold = 5, nfold_pre = 5,
+                                        dataseed = 1,
+                                        snr = 0.1,
                                         nλ = 2, # only for grid_search or iter_search
                                         nk = 50 # only for fix_ratio
                                     )
