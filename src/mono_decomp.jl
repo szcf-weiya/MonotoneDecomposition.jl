@@ -328,6 +328,7 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abs
                                 ss = 10.0 .^ (-6:0.1:-1), 
                                 s_is_μ = true, figname = nothing, 
                                 seed = rand(UInt64),
+                                argmin_with_tol = 0,
                                 one_se_rule = false, use_GI = false) where T <: AbstractFloat
     n = length(x)
     folds = div_into_folds(n, K = nfold, seed = seed)
@@ -357,10 +358,14 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}, xnew::Abs
     end
     μerr = dropdims(mean(errs, dims = 1), dims = 1)
     σerr = dropdims(std(errs, dims = 1), dims=1) / sqrt(nfold)
+    if argmin_with_tol == 0
     if one_se_rule
         ind = cv_one_se_rule(μerr, σerr, small_is_simple = [true, false])
     else
         ind = argmin(μerr)
+    end
+    else
+        ind = cv_one_se_rule(μerr, ones(size(μerr)) * argmin_with_tol, small_is_simple = [true, false])
     end
     Jopt = Js[ind[1]]
     sopt = ss[ind[2]]
@@ -388,6 +393,7 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}; ss = 10.0
                                                             Js = 4:50,
                                                             seed = rand(UInt64),
                                                             one_se_rule = false,
+                                                            argmin_with_tol = 0,
                                                             use_GI = false, # currently only for single μ
                                                             one_se_rule_pre = false)::Tuple{MonoDecomp{T}, T, Array{T}, Array{T}} where T <: AbstractFloat
     if length(Js) == 1
@@ -404,9 +410,9 @@ function cv_mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T}; ss = 10.0
             J, _ = cv_cubic_spline(x, y, x0, one_se_rule = one_se_rule_pre, nfold = nfold_pre, Js = Js,
                                                 figname = isnothing(figname) ? figname : figname[1:end-4] * "_bspl.png")
         end
-        return cv_mono_decomp_cs(x, y, x0, Js = J:J, ss = ss, figname = figname, nfold = nfold, one_se_rule = one_se_rule, use_GI = use_GI, seed = seed)
+        return cv_mono_decomp_cs(x, y, x0, Js = J:J, ss = ss, figname = figname, nfold = nfold, one_se_rule = one_se_rule, use_GI = use_GI, seed = seed, argmin_with_tol = argmin_with_tol)
     else
-        return cv_mono_decomp_cs(x, y, x0, ss = ss, Js = Js, figname = figname, nfold = nfold, one_se_rule = one_se_rule, use_GI = use_GI, seed = seed)
+        return cv_mono_decomp_cs(x, y, x0, ss = ss, Js = Js, figname = figname, nfold = nfold, one_se_rule = one_se_rule, use_GI = use_GI, seed = seed, argmin_with_tol = argmin_with_tol)
     end
 end
 
