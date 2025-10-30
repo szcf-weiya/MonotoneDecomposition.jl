@@ -58,6 +58,9 @@ mutable struct WorkSpaceSS <: WorkSpace
     Bend::Matrix{Float64}
     Bendd::Matrix{Float64}
     knots::Vector{Float64}
+    Ω::Matrix{Float64}
+    W::Matrix{Float64}
+    V::Matrix{Float64}
     # Bnew::AbstractMatrix{Float64} # not for cross-validation
     WorkSpaceSS() = new()
     # WorkSpaceSS(e, j, b, l, h, m, r, i, i0, be, bd, k) = new(e, j, b, l, h, m, r, i, i0, be, bd, k)
@@ -246,12 +249,7 @@ function mono_decomp_cs(x::AbstractVector{T}, y::AbstractVector{T};
         build_model!(workspace, x, use_GI = use_GI)
     end
     if use_GI
-        _γhat = try
-            _optim(y, workspace, s)
-        catch e
-            @warn "GI solver failed due to $e; use default solver"
-            _optim(y, workspace, [s])[:]
-        end
+        _γhat = _optim(y, workspace, s)
     else
         if s_is_μ
             _γhat = _optim(y, workspace, [s])[:]
@@ -463,6 +461,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
                                                             one_se_rule_pre = false, 
                                                             argmin_with_tol = 0,
                                                             use_r_ss = false,
+                                                            use_GI = false,
                                                             kw...) where T <: AbstractFloat
     if use_r_ss
         yhat, yhatnew, Ω, λ, spl, B, γss = smooth_spline(x, y, x0, design_matrix = true, keep_stuff = true, LOOCV = true)
@@ -503,7 +502,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         #ks = range(kmin, kmax, length = nk)
         #ks = exp.(range(log.(kmin), log.(kmax), length = nk))
         ks = 1 ./ (exp.(range(log.(1 ./ kmax .- 1), log.(1 ./ kmin .- 1), length = nk)) .+ 1)
-        D, μs, errs, σerrs = cvfit(x, y, ks, λ, figname = figname, nfold = nfold, seed = seed, prop_nknots = prop_nknots, multi_fix_ratio = multi_fix_ratio, same_J_after_CV = same_J_after_CV)
+        D, μs, errs, σerrs = cvfit(x, y, ks, λ, figname = figname, nfold = nfold, seed = seed, prop_nknots = prop_nknots, multi_fix_ratio = multi_fix_ratio, same_J_after_CV = same_J_after_CV, use_GI = use_GI)
     elseif method == "iter_search" #88
         verbose && @info "Smoothing Splines with iter-search: λ -> μ -> λ -> ... -> μ"
         iter = 0
@@ -547,7 +546,7 @@ function cv_mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; figname =
         end
         @debug "grid search λ in $λs"
         μs = exp.(range(log(μrange[1]), log(μrange[2]), length = ngrid_μ))
-        D, errs, σerrs = cvfit(x, y, μs, λs, nfold = nfold, figname = figname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV)
+        D, errs, σerrs = cvfit(x, y, μs, λs, nfold = nfold, figname = figname, seed = seed, prop_nknots = prop_nknots, include_boundary = include_boundary, same_J_after_CV = same_J_after_CV, use_GI = use_GI)
     else # grid_search
         if isnothing(rλs)
             λs = range(1-rλ, 1+rλ, length = nλ) .* λ
@@ -611,13 +610,33 @@ Optimization for monotone decomposition with smoothing splines.
 function _optim(y::AbstractVector{T}, workspace::WorkSpaceCS, μ::T) where T <: AbstractFloat
     D = workspace.V .+ μ * workspace.W
     q = workspace.B' * y
+    sol = try
     sol, lagr, crval, iact, nact, iter = solveQP(D, vcat(q, q), -workspace.H'*1.0, zeros(2(workspace.J-1)))
+        sol
+    catch e
+        @warn "GI solver failed due to $e; use default solver"
+        _optim(y, workspace, [μ])[:]
+    end
     return sol
 end
 
 function _optim(y::AbstractVector{T}, workspace::WorkSpaceCS, μs::AbstractVector{T}) where T <: AbstractFloat
     @assert workspace.evaluated
     return _optim(y, workspace.J, workspace.B, workspace.H, μs)
+end
+
+function _optim(y::AbstractVector{T}, workspace::WorkSpaceSS, λ::T, μ::T) where T <: AbstractFloat
+    Σ = repeat(workspace.Ω, 2, 2)
+    D = workspace.V .+ μ * workspace.W .+ λ * Σ
+    q = workspace.B' * y
+    sol = try
+        sol, lagr, crval, iact, nact, iter = solveQP(D, vcat(q, q), -workspace.H'*1.0, zeros(2(workspace.J-1)))        
+        sol
+    catch e
+        @warn "GI solver failed due to $e when μ = $μ; use default solver"
+        _optim(y, workspace.J, workspace.B, nothing, workspace.H, L = workspace.L, t = nothing, λ = λ, μ = μ)
+    end
+    return sol
 end
 
 # without penalty, common cubic spline
@@ -932,14 +951,15 @@ function _optim(y::AbstractVector{T}, J::Int, B::AbstractMatrix{T}, s::Union{Not
     return γhat
 end
 
-function build_model!(workspace::WorkSpaceSS, x::AbstractVector{T}; ε = eps()^(1/3), prop_nknots = 1.0) where T <: AbstractFloat
+function build_model!(workspace::WorkSpaceSS, x::AbstractVector{T}; ε = eps()^(1/3), prop_nknots = 1.0, use_GI = false) where T <: AbstractFloat
     if !isdefined(workspace, 3) # the first two will be automatically initialized
         knots, mx, rx, idx, idx0 = pick_knots(x, all_knots = false, prop_nknots = prop_nknots)
         bbasis = R"fda::create.bspline.basis(breaks = $knots, norder = 4)"
         Ω = rcopy(R"fda::eval.penalty($bbasis, 2)")
         Ω += ε * 1.0I
         xbar = (x .- mx) ./ rx
-        workspace.B = rcopy(R"fda::eval.basis($xbar, $bbasis)")
+        B = rcopy(R"fda::eval.basis($xbar, $bbasis)")
+        workspace.B = B
         workspace.Bend = rcopy(R"fda::eval.basis(c(0, 1), $bbasis)")
         workspace.Bendd = rcopy(R"fda::eval.basis(c(0, 1), $bbasis, Lfdobj=1)")
         J = length(knots) + 2
@@ -961,6 +981,11 @@ function build_model!(workspace::WorkSpaceSS, x::AbstractVector{T}; ε = eps()^(
         workspace.idx = idx
         workspace.idx0 = idx0
         workspace.knots = knots
+        if use_GI
+            workspace.Ω = Matrix(Symmetric(Ω))
+            workspace.W = [B'; -B'] * [B -B]
+            workspace.V = [B'; B'] * [B B]
+        end
     end    
 end
 
@@ -969,12 +994,17 @@ end
 
 Monotone decomposition with smoothing splines.
 """
-function mono_decomp_ss(workspace::WorkSpaceSS, x::AbstractVector{T}, y::AbstractVector{T}, λ::AbstractFloat, s::AbstractFloat; s_is_μ = true, prop_nknots = 1.0, strict = false)::MonoDecomp{T} where T <: AbstractFloat
-    build_model!(workspace, x, prop_nknots = prop_nknots)
+function mono_decomp_ss(workspace::WorkSpaceSS, x::AbstractVector{T}, y::AbstractVector{T}, λ::AbstractFloat, s::AbstractFloat; 
+            s_is_μ = true, prop_nknots = 1.0, strict = false, use_GI = false)::MonoDecomp{T} where T <: AbstractFloat
+    build_model!(workspace, x, prop_nknots = prop_nknots, use_GI = use_GI)
+    if use_GI
+        _γhat = _optim(y, workspace, λ, s)
+    else
     if s_is_μ
         _γhat = _optim(y, workspace.J, workspace.B, nothing, workspace.H, L = workspace.L, t = nothing, λ = λ, μ = s, strict = strict)
     else
         _γhat = _optim(y, workspace.J, workspace.B, s, workspace.H, L = workspace.L, t = nothing, λ = λ, strict = strict)
+        end
     end
     # calculate properties of monotone decomposition
     J = workspace.J
@@ -984,9 +1014,9 @@ function mono_decomp_ss(workspace::WorkSpaceSS, x::AbstractVector{T}, y::Abstrac
     yhat = workspace.B * γhat
     return MonoDecomp(γup, γdown, γhat, yhat, λ, s, workspace)
 end
-function mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; λ = 1.0, s = 1.0, s_is_μ = true) where T <: AbstractFloat
+function mono_decomp_ss(x::AbstractVector{T}, y::AbstractVector{T}; λ = 1.0, s = 1.0, s_is_μ = true, use_GI = false) where T <: AbstractFloat
     workspace = WorkSpaceSS()
-    return mono_decomp_ss(workspace, x, y, λ, s, s_is_μ = s_is_μ)
+    return mono_decomp_ss(workspace, x, y, λ, s, s_is_μ = s_is_μ, use_GI = use_GI)
 end
 
 MDSS = mono_decomp_ss
@@ -1424,7 +1454,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μmax::Real, λ::Abst
     return D, last_min_μerr
 end
 
-function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, paras::AbstractMatrix{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), same_J_after_CV = true, prop_nknots = 1.0) where T <: AbstractFloat
+function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, paras::AbstractMatrix{T}; nfold = 10, figname = "/tmp/cv_curve.png", seed = rand(UInt64), same_J_after_CV = true, prop_nknots = 1.0, use_GI = false) where T <: AbstractFloat
     # assume two columns, the first column is mu, and the 2nd column is lambda
     @assert size(paras, 2) == 2
     n = length(x)
@@ -1435,9 +1465,13 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, paras::AbstractMatrix
         test_idx = folds[k]
         train_idx = setdiff(1:n, test_idx)
         workspace = WorkSpaceSS()
-        build_model!(workspace, x[train_idx], prop_nknots = prop_nknots)
-        # ...............................................................................lambda.......mu
+        build_model!(workspace, x[train_idx], prop_nknots = prop_nknots, use_GI = use_GI)
+        if use_GI
+            γhats = hcat([_optim(y[train_idx], workspace, paras[i, 2], paras[i, 1]) for i in eachindex(paras[:, 1])]...)                
+        else
+            # ..................................................................................lambda.......mu
         γhats = _optim(y[train_idx], workspace.J, workspace.B, workspace.H, workspace.L, paras[:, 2], paras[:, 1])
+        end
         ynews = predict(workspace, x[test_idx], γhats[1:workspace.J, :] + γhats[workspace.J+1:2workspace.J, :])
         for j = 1:npara
             err[k, j] = norm(ynews[:, j] - y[test_idx]).^2 / length(test_idx)
@@ -1457,10 +1491,11 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, paras::AbstractMatrix
     nx_fold = rcopy(R".nknots.smspl($(n_fold))")
     nx = rcopy(R".nknots.smspl($(n))")
     D = mono_decomp_ss(workspace, x, y, paras[ind, 2], paras[ind, 1], 
-                        prop_nknots = prop_nknots * ifelse(same_J_after_CV, nx_fold / nx, 1.0))
+                        prop_nknots = prop_nknots * ifelse(same_J_after_CV, nx_fold / nx, 1.0), use_GI = use_GI)
     return D, paras[:, 1], μerr, σerr
 end
 
+## consider μ x λ
 function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}, λ::AbstractVector{T}; 
                     nfold = 10, seed = rand(UInt64), 
                     folds = nothing,
@@ -1468,6 +1503,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}
                     same_J_after_CV = true, 
                     prop_nknots = 1.0, 
                     include_boundary = false, 
+                    use_GI = false,
                     strict = false) where T <: AbstractFloat
     n = length(x)
     if isnothing(folds)
@@ -1491,11 +1527,15 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}
             test_idx = setdiff(1:n, train_idx)
         end
         workspace = WorkSpaceSS()
-        build_model!(workspace, x[train_idx], prop_nknots = prop_nknots)
+        build_model!(workspace, x[train_idx], prop_nknots = prop_nknots, use_GI = use_GI)
+        if use_GI
+            γhats = hcat([_optim(y[train_idx], workspace, λs[i], μs[i]) for i in eachindex(μs)]...)
+        else
         γhats = try
-            _optim2(y[train_idx], workspace.J, workspace.B, workspace.H, workspace.L, λs, μs, strict = strict)
+                _optim2(y[train_idx], workspace.J, workspace.B, workspace.H, workspace.L, λs, μs, strict = strict)
         catch e
             error(e)
+            end
         end
         ynews = predict(workspace, x[test_idx], γhats[1:workspace.J, :] + γhats[workspace.J+1:2workspace.J, :])
         for j = 1:nλ
@@ -1521,7 +1561,7 @@ function cvfit(x::AbstractVector{T}, y::AbstractVector{T}, μ::AbstractVector{T}
     nx_fold = rcopy(R".nknots.smspl($(n_fold))")
     nx = rcopy(R".nknots.smspl($(n))")    
     D = mono_decomp_ss(workspace, x, y, λ[ind[2]], μ[ind[1]], 
-                        prop_nknots = prop_nknots * ifelse(same_J_after_CV, nx_fold / nx, 1.0), strict = strict) 
+                        prop_nknots = prop_nknots * ifelse(same_J_after_CV, nx_fold / nx, 1.0), strict = strict, use_GI = use_GI) 
     return D, μerr, σerr
 end
 

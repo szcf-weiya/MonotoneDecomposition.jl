@@ -441,10 +441,40 @@ end
     @test all(abs.(D1.γdown - D2.γdown) .< tol)
     @test all(abs.(D1.γup - D2.γup) .< tol)    
 
-    cvD1 = cv_mono_decomp_cs(x, y, ss = [0.1, 1.0], Js = 10:10, use_GI = true, nfold = 100) # LOOCV avoid cv randomness
-    cvD2 = cv_mono_decomp_cs(x, y, ss = [0.1, 1.0], Js = 10:10, use_GI = false, nfold = 100)
+    cvD1 = cv_mono_decomp_cs(x, y, ss = [0.1, 1.0], Js = 10:10, use_GI = true, seed = 1) 
+    cvD2 = cv_mono_decomp_cs(x, y, ss = [0.1, 1.0], Js = 10:10, use_GI = false, seed = 1)
     @test all(abs.(cvD1[3] - cvD2[3]) .< tol)
     @test all(abs.(cvD1[4] - cvD2[4]) .< tol)
+    @test all(abs.(cvD1[1].γdown -cvD2[1].γdown) .< tol)
+    @test all(abs.(cvD1[1].γup -cvD2[1].γup) .< tol)
+end
+
+@testset "GI solver for MDSS" begin
+    tol = 1e-4
+    x, y, _ = gen_data(100, 0.1, x->x^3)
+    D1 = mono_decomp_ss(x, y, λ = 1.0, s = 1.0, s_is_μ = true, use_GI = true)
+    D2 = mono_decomp_ss(x, y, λ = 1.0, s = 1.0, s_is_μ = true, use_GI = false)
+    @test all(abs.(D1.γdown - D2.γdown) .< tol)
+    @test all(abs.(D1.γup - D2.γup) .< tol)
+
+    cvD1 = cv_mono_decomp_ss(x, y, method = "double_grid", rλs = [1], μrange = [1e-7, 1e2], ngrid_μ = 100, seed = 1, use_GI = true)
+    cvD2 = cv_mono_decomp_ss(x, y, method = "double_grid", rλs = [1], μrange = [1e-7, 1e2], ngrid_μ = 100, seed = 1, use_GI = false)
+    @test abs.(cvD1[1].λ -cvD2[1].λ) .< tol
+    @test abs.(cvD1[1].μ -cvD2[1].μ) .< tol
+    @test all(abs.(cvD1[1].γdown -cvD2[1].γdown) .< tol)
+    @test all(abs.(cvD1[1].γup -cvD2[1].γup) .< tol)
+
+    cvD1 = cv_mono_decomp_ss(x, y, method = "double_grid", rλs = 0.6:0.2:1.4, μrange = [1e-7, 1e2], ngrid_μ = 100, seed = 1, use_GI = true)
+    cvD2 = cv_mono_decomp_ss(x, y, method = "double_grid", rλs = 0.6:0.2:1.4, μrange = [1e-7, 1e2], ngrid_μ = 100, seed = 1, use_GI = false)
+    @test abs.(cvD1[1].λ -cvD2[1].λ) .< tol
+    @test abs.(cvD1[1].μ -cvD2[1].μ) .< tol
+    @test all(abs.(cvD1[1].γdown -cvD2[1].γdown) .< tol)
+    @test all(abs.(cvD1[1].γup -cvD2[1].γup) .< tol)
+
+    cvD1 = cv_mono_decomp_ss(x, y, method = "fix_ratio", seed = 1, use_GI = true)
+    cvD2 = cv_mono_decomp_ss(x, y, method = "fix_ratio", seed = 1, use_GI = false)
+    @test abs.(cvD1[1].λ -cvD2[1].λ) .< tol
+    @test abs.(cvD1[1].μ -cvD2[1].μ) .< tol
     @test all(abs.(cvD1[1].γdown -cvD2[1].γdown) .< tol)
     @test all(abs.(cvD1[1].γup -cvD2[1].γup) .< tol)
 end
