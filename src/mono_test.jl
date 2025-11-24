@@ -321,7 +321,7 @@ function single_test_compare_mono_snr(;
         nrep = 500, kw...
     )
     # proposed, ghosal, meyer, sm
-    pvals = zeros(length(ns), length(σs), 5, 5)
+    pvals = zeros(length(ns), length(snrs), 5, 5)
     for (i, n) in enumerate(ns)
         # for (k, σ) in enumerate(σs)
         for (k, snr) in enumerate(snrs)
