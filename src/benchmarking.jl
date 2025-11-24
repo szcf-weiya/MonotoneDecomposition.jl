@@ -441,7 +441,7 @@ function summary2(;nλ = 20,
         σerrs = Array{AbstractMatrix{Float64}}(undef, ntitle)
         # pvals = Array{AbstractMatrix{Float64}}(undef, ntitle)
         pvals = Array{AbstractVector}(undef, ntitle)
-        pvals_wilcox = Array{AbstractVector}(undef, ntitle)
+        # pvals_wilcox = Array{AbstractVector}(undef, ntitle)
         props = Array{AbstractVector}(undef, ntitle)
         snr_μs = Array{AbstractMatrix{Float64}}(undef, ntitle)
         snr_σs = Array{AbstractMatrix{Float64}}(undef, ntitle)
@@ -449,6 +449,7 @@ function summary2(;nλ = 20,
         # selected noise levels
         if use_snr
             ind = 1:length(snrs)
+            # ind = [1]
             σs = snrs
         else
             if length(σs) >= 10        
@@ -497,10 +498,10 @@ function summary2(;nλ = 20,
             dσ = std(ds, dims = 1)[1, :] / sqrt(nrep)
             # pval = 1 .- cdf(Normal(0, 1), abs.(dμ) ./ dσ)
             # pvals[i] = star_pval(pval[ind])
-            pval = [rcopy(R"t.test($(res[:, 2, j]), $(res[:, 4, j]), paired = TRUE)$p.value") for j in ind]
+            #pval = [rcopy(R"t.test($(res[:, 2, j]), $(res[:, 4, j]), paired = TRUE)$p.value") for j in ind]
+            #pvals[i] = star_pval(pval)
+            pval = [rcopy(R"wilcox.test($(res[:, 2, j]), $(res[:, 4, j]), paired = TRUE)$p.value") for j in ind]
             pvals[i] = star_pval(pval)
-            pval_wilcox = [rcopy(R"wilcox.test($(res[:, 2, j]), $(res[:, 4, j]), paired = TRUE)$p.value") for j in ind]
-            pvals_wilcox[i] = star_pval(pval_wilcox)
             μerrs[i] = mean(res, dims = 1)[1, [4, 2], ind]'
             σerrs[i] = std(res, dims = 1)[1, [4, 2], ind]' / sqrt(nrep)
             isbf[i] = zeros(length(ind), 2)
@@ -514,10 +515,12 @@ function summary2(;nλ = 20,
             other_cols = ifelse(use_snr, σs_from_snr, nothing),
             other_cols_σ = nothing,
             other_col_names = [L"\sigma"],
-            right_cols = [pvals, pvals_wilcox, props],
-            right_col_names = ["p-value", "p-value (wilcox)", "prop."], 
+            #right_cols = [pvals, pvals_wilcox, props],
+            right_cols = [pvals, props],
+            #right_col_names = ["p-value", "p-value (wilcox)", "prop."], 
+            right_col_names = ["p-value", "prop."], 
             right_align = "l", # it might be slightly worse for other columns, but center is not good for the pvalue column TODO: improve the style
             colnames_of_rownames = ["curve", ifelse(use_snr, "SNR", L"\sigma")], 
-            file = joinpath(resfolder0, "$filename-v2.tex"), isbf = isbf)
+            file = joinpath(resfolder0, "$filename-ind$(length(ind)).tex"), isbf = isbf)
     end
 end

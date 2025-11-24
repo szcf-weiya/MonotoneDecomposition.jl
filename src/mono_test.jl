@@ -11,16 +11,22 @@ using RCall
 
 Generate Curves for Monotonicity Test used in Bowman et al. (1998)
 """
-function gen_data_bowman(;n = 50, a = 0, σ = 0.1, plt = false, kw...)
+function gen_data_bowman(;n = 50, a = 0, σ = 0.1, snr = 1.0, plt = false, kw...)
     xs = range(0, 1, length = n)
     f(x, a) = 1 + x - a * exp(-1/2 * (x-0.5)^2 / 0.1^2)
     ys0 = [f(x, a) for x in xs] 
+if isnothing(σ)
+        σ = sqrt(var(ys0) / snr)
+        @info "use σ = $σ to achieve SNR = $snr"
+    else
+        @info "σ = $σ, resulting SNR = $(var(ys0) / σ^2)"
+    end
     ys = ys0 + randn(n) * σ
     if plt
         plot(xs, ys0; legend = false, title = "n = $n, a = $a, σ = $σ", kw...)
         scatter!(xs, ys)
     else
-        return xs, ys
+        return xs, ys, σ, snr
     end
 end
 
@@ -48,18 +54,48 @@ end
 
 Generate monotonic curves, used for checking type I error under H0. (Table 4 and Figure 5 in the paper)
 """
-function gen_mono_data(; n = 100, σ = 0.1, equidistant = false)
+function gen_mono_data(; n = 100, σ = 0.1, snr = 1.0, equidistant = false)
     if equidistant
         x = range(0, 1, length = n)
     else
         x = rand(n)
     end
-    m1 = x + randn(n) * σ
-    m2 = x .^3 + randn(n) * σ
-    m3 = cbrt.(x) + randn(n) * σ
-    m4 = exp.(x) .- 1 + randn(n) * σ
-    m5 = 1 ./ (1 .+ exp.(-x)) + randn(n) * σ
-    return x, m1, m2, m3, m4, m5
+    m10 = x
+    σs = Float64[]
+    if !isnothing(snr)
+        σ = sqrt(var(m10) / snr)
+        push!(σs, σ)
+    end
+    m1 = m10 + randn(n) * σ
+    
+    m20 = x .^3
+    if !isnothing(snr)
+        σ = sqrt(var(m20) / snr)
+        push!(σs, σ)
+    end
+    m2 = m20 + randn(n) * σ
+    
+    m30 = cbrt.(x)
+    if !isnothing(snr)
+        σ = sqrt(var(m30) / snr)
+        push!(σs, σ)
+    end
+    m3 = m30 + randn(n) * σ
+    
+    m40 = exp.(x) .- 1
+    if !isnothing(snr)
+        σ = sqrt(var(m40) / snr)
+        push!(σs, σ)
+    end
+    m4 = m40 + randn(n) * σ
+    
+    m50 = 1 ./ (1 .+ exp.(-x))
+    if !isnothing(snr)
+        σ = sqrt(var(m50) / snr)
+        push!(σs, σ)
+    end
+    m5 = m50 + randn(n) * σ
+    return x, m1, m2, m3, m4, m5, σs
 end
 
 """
@@ -255,12 +291,14 @@ function single_test_compare_mono(;
         ns = [50, 100, 200],
         σs = [0.001, 0.01, 0.1],
         equidistant = false,
+dataseed = 1,
         nrep = 500, kw...
     )
     # proposed, ghosal, meyer, sm
     pvals = zeros(length(ns), length(σs), 5, 5)
     for (i, n) in enumerate(ns)
         for (k, σ) in enumerate(σs)
+Random.seed!(dataseed)
             x, m1, m2, m3, m4, m5 = gen_mono_data(n = n, σ = σ, equidistant = equidistant)
             for (j, y) in enumerate([m1, m2, m3, m4, m5])
                 pvals[i, k, j, 1] = meyer(x, y)
@@ -274,8 +312,37 @@ function single_test_compare_mono(;
     return pvals
 end
 
+function single_test_compare_mono_snr(;
+        ns = [50, 100, 200],
+        # σs = [0.001, 0.01, 0.1],
+        snrs = [10000, 100, 1],
+        equidistant = false,
+        dataseed = 1,
+        nrep = 500, kw...
+    )
+    # proposed, ghosal, meyer, sm
+    pvals = zeros(length(ns), length(σs), 5, 5)
+    for (i, n) in enumerate(ns)
+        # for (k, σ) in enumerate(σs)
+        for (k, snr) in enumerate(snrs)
+            Random.seed!(dataseed)
+            x, m1, m2, m3, m4, m5 = gen_mono_data(n = n, σ = nothing, snr = snr, equidistant = equidistant)
+            for (j, y) in enumerate([m1, m2, m3, m4, m5])
+                pvals[i, k, j, 1] = meyer(x, y)
+                pvals[i, k, j, 2] = ghosal(x, y)
+                pvals[i, k, j, 3] = bowman(x, y)
+                pvals[i, k, j, 4] = mono_test_bootstrap_cs(x, y; nrep = nrep, kw...)[1]
+                pvals[i, k, j, 5] = mono_test_bootstrap_ss(x, y; nrep = nrep, kw...)[1]
+            end
+        end
+    end
+    return pvals
+end
+
+fdiff(x::AbstractVector) = sum(abs.(diff(x)))
+
 function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, 
-                                            μs = 10.0 .^ (-6:0.1:2), Js = 4:50, fixJ = true,
+                                            μs = 10.0 .^ (-6:0.1:2), Js = 4:Int(25 + length(x) / 2.5), fixJ = true,
                                             nblock = -1, # wild bootstrap
                                             one_se_rule = false, 
                                             one_se_rule_pre = false, 
@@ -283,6 +350,7 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
                                             nfold = 10, nfold_pre = 10,
                                             use_GI = true,
                                             h0_mono = false, # increasing or decreasing
+w_pval_tie = 0.5,
                                             kw...)::Tuple{T, MonoDecomp{T}} where T <: Real
     D, μ = cv_mono_decomp_cs(x, y, ss = μs, one_se_rule = one_se_rule, fixJ = fixJ, Js = Js, one_se_rule_pre = one_se_rule_pre, figname = figname, nfold = nfold, nfold_pre = nfold_pre, use_GI = use_GI)
     @debug D.γdown
@@ -293,10 +361,10 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
     error = y .- D.yhat
     @debug maximum(max.(error))
     # σ = std(err)
-    tobs = var(D.γdown)
+    tobs = fdiff(D.γdown)
     flag_incr = true
     if h0_mono
-        tobs1 = var(D.γup)
+        tobs1 = fdiff(D.γup)
         if tobs1 < tobs
             flag_incr = false
             tobs = tobs1
@@ -304,19 +372,20 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
     end
     ts = zeros(nrep)
     # println("address of D.w: ", pointer_from_objref(D.workspace))
+if flag_incr
     yhat = D.workspace.B * D.γup .+ c
-    if !flag_incr
+    else
         yhat = D.workspace.B * D.γdown .+ c
     end
     for i = 1:nrep
         yi = construct_bootstrap_y(y, error, yhat, nblock = nblock)
         try
-            Di = mono_decomp_cs(x, yi, s = μ, s_is_μ = true, J = J, workspace = D.workspace, use_GI = use_GI)
+            Di = mono_decomp_cs(x, yi, s = D.μ, s_is_μ = true, J = J, workspace = D.workspace, use_GI = use_GI)
             # println("address of Di.w: ", pointer_from_objref(Di.workspace))
             if h0_mono
-                ts[i] = min(var(Di.γdown), var(Di.γup))
+                ts[i] = min(fdiff(Di.γdown), fdiff(Di.γup))
             else
-                ts[i] = var(Di.γdown)
+                ts[i] = fdiff(Di.γdown)
             end
         catch e
             @warn "due to error $e in optimization, assign test statistic as Inf"
@@ -325,7 +394,7 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
     end
     @debug ts
     @debug tobs
-    pval = (sum(ts .> tobs) + sum(ts .== tobs) * 0.5) / nrep
+    pval = (sum(ts .> tobs) + sum(ts .== tobs) * w_pval_tie) / nrep
     return pval, D
 end
 
@@ -355,7 +424,7 @@ function block_bootstrap_idx(e::AbstractVector; nblock = 10)
 end
 
 ## yhat = B*γ .+ c
-function construct_bootstrap_y(y::AbstractVector{T}, e::AbstractVector{T}, yhat::AbstractVector{T}; nblock = -1, σe = std(e), debias_mean_yi = true) where T <: AbstractFloat
+function construct_bootstrap_y(y::AbstractVector{T}, e::AbstractVector{T}, yhat::AbstractVector{T}; nblock = -1, σe = std(e), debias_mean_yi = true, n_per_block = 5) where T <: AbstractFloat
     n = length(y)
     if nblock > 0
         idx, μb, μi = block_bootstrap_idx(e; nblock = nblock)
@@ -365,6 +434,11 @@ function construct_bootstrap_y(y::AbstractVector{T}, e::AbstractVector{T}, yhat:
         ei = ei .- mean(ei) .+ mean(e)
     elseif nblock == -1 # wild bootstrap
         ei = randn(n) .* e
+elseif nblock == -11
+        K = Int.(n / n_per_block)
+        @assert K * n_per_block == n
+        block_weight = repeat(randn(K), inner = n_per_block)
+        ei = block_weight .* e
     elseif nblock == -2
         ei = ifelse.(randn(n) .> 0, 1, -1) .* e
     else
@@ -395,6 +469,7 @@ function mono_test_bootstrap_ss(x::AbstractVector{T}, y::AbstractVector{T}; nrep
                                                                 md_method = "double_grid",
                                                                 rλs=10.0 .^ (0:0),
                                                                 nblock = -1, # wild bootstrap
+w_pval_tie = 0.5,
                                                                 kw...)::Tuple{T, MonoDecomp{T}} where T <: Real
     D, _ = cv_mono_decomp_ss(x, y; one_se_rule = one_se_rule, 
             one_se_rule_pre = one_se_rule_pre,
@@ -403,19 +478,19 @@ function mono_test_bootstrap_ss(x::AbstractVector{T}, y::AbstractVector{T}; nrep
     error = y - D.yhat
     c = mean(D.yhat) / 2
     error = y - D.yhat
-    tobs = var(D.γdown)
+    tobs = fdiff(D.γdown)
     ts = zeros(nrep)
     yhat = D.workspace.B * D.γup .+ c
     for i = 1:nrep
         yi = construct_bootstrap_y(y, error, yhat, nblock = nblock)
         try
             Di = mono_decomp_ss(D.workspace, x, yi, D.λ, D.μ, strict = true)
-            ts[i] = var(Di.γdown)
+            ts[i] = fdiff(Di.γdown)
         catch e
             @warn "due to error $e in optimization, assign test statistic as Inf"
             ts[i] = Inf
         end
     end
-    pval = (sum(ts .> tobs) + sum(ts .== tobs) * 0.5) / nrep
+    pval = (sum(ts .> tobs) + sum(ts .== tobs) * w_pval_tie) / nrep
     return pval, D
 end
