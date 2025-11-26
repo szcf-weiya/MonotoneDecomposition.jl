@@ -382,7 +382,9 @@ function single_test_compare_mono_snr(;
     return pvals
 end
 
-fdiff(x::AbstractVector) = sum(abs.(diff(x)))
+#fdiff(x::AbstractVector) = sum(abs.(diff(x)))
+fdiff(x::AbstractVector) = var(x)
+
 
 function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep = 100, 
                                             μs = 10.0 .^ (-6:0.1:2), Js = 4:Int(25 + length(x) / 2.5), fixJ = true,
@@ -394,6 +396,7 @@ function mono_test_bootstrap_cs(x::AbstractVector{T}, y::AbstractVector{T}; nrep
                                             use_GI = true,
                                             h0_mono = false, # increasing or decreasing
 w_pval_tie = 0.5,
+tol_pval = 1e-16,
                                             kw...)::Tuple{T, MonoDecomp{T}} where T <: Real
     D, μ = cv_mono_decomp_cs(x, y, ss = μs, one_se_rule = one_se_rule, fixJ = fixJ, Js = Js, one_se_rule_pre = one_se_rule_pre, figname = figname, nfold = nfold, nfold_pre = nfold_pre, use_GI = use_GI)
     @debug D.γdown
@@ -437,7 +440,7 @@ if flag_incr
     end
     @debug ts
     @debug tobs
-    pval = (sum(ts .> tobs) + sum(ts .== tobs) * w_pval_tie) / nrep
+    pval = (sum(ts .> tobs .+ tol_pval) + sum( (tobs .- tol_pval) .<= ts .<= (tobs .+ tol_pval) ) * w_pval_tie) / nrep
     return pval, D
 end
 
@@ -513,6 +516,7 @@ function mono_test_bootstrap_ss(x::AbstractVector{T}, y::AbstractVector{T}; nrep
                                                                 rλs=10.0 .^ (0:0),
                                                                 nblock = -1, # wild bootstrap
 w_pval_tie = 0.5,
+tol_pval = 1e-16,
                                                                 kw...)::Tuple{T, MonoDecomp{T}} where T <: Real
     D, _ = cv_mono_decomp_ss(x, y; one_se_rule = one_se_rule, 
             one_se_rule_pre = one_se_rule_pre,
@@ -534,6 +538,6 @@ w_pval_tie = 0.5,
             ts[i] = Inf
         end
     end
-    pval = (sum(ts .> tobs) + sum(ts .== tobs) * w_pval_tie) / nrep
+    pval = (sum(ts .> tobs .+ tol_pval) + sum( (tobs .- tol_pval) .<= ts .<= (tobs .+ tol_pval) ) * w_pval_tie) / nrep
     return pval, D
 end
