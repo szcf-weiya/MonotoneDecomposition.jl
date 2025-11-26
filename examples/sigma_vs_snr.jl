@@ -37,3 +37,18 @@ serialize("../res/sigma_vs_snr/test_snr10000.sil", μ_σs)
 σs1w = deserialize("../res/sigma_vs_snr/test_snr10000.sil")
 σs100 = deserialize("../res/sigma_vs_snr/test_snr100.sil")
 σs1 = deserialize("../res/sigma_vs_snr/test_snr1.sil")
+
+######## bowman
+as = [0, 0.15, 0.25, 0.45]
+σs = zeros(4)
+for (j, a) in enumerate(as)
+    x, y, σ, snr = MonotoneDecomposition.gen_data_bowman(a = as[j], n = 1000, σ = nothing, snr = 1000)
+    σs[j] = σ
+end
+serialize("../res/sigma_vs_snr/test_bowman_snr1.sil", σs)
+serialize("../res/sigma_vs_snr/test_bowman_snr100.sil", σs)
+serialize("../res/sigma_vs_snr/test_bowman_snr10000.sil", σs)
+
+
+####### ghosal
+x, m1, m2, m3, m4, σs = gen_data_ghosal(n = 1000, σ = nothing, snr = 1)

@@ -103,15 +103,32 @@ end
 
 Generate curves used in Ghosal et al. (2000).
 """
-function gen_data_ghosal(; n = 100, σ = 0.1, plt = false)
+function gen_data_ghosal(; n = 100, σ = 0.1, snr = nothing, plt = false)
     xs = rand(n)
     m10 = zeros(n)
     m20 = xs .* (1 .- xs)
     m30 = xs .+ 0.415 * exp.(-50 * xs.^2)
     m40 = (10 * (xs .- 0.5).^3 - exp.(-100 * (xs .- 0.25).^2) ) .* (xs .< 0.5) + (0.1 * (xs .- 0.5) - exp.(-100 * (xs .- 0.25).^2)) .* (xs .>= 0.5)
+σs = Float64[]
+    if !isnothing(snr)
+        σ = sqrt(var(m10) / snr)
+        push!(σs, σ)
+    end
     m1 = m10 + randn(n) * σ
+if !isnothing(snr)
+        σ = sqrt(var(m20) / snr)
+        push!(σs, σ)
+    end
     m2 = m20 + randn(n) * σ
+if !isnothing(snr)
+        σ = sqrt(var(m30) / snr)
+        push!(σs, σ)
+    end
     m3 = m30 + randn(n) * σ
+if !isnothing(snr)
+        σ = sqrt(var(m40) / snr)
+        push!(σs, σ)
+    end
     m4 = m40 + randn(n) * σ
     if plt
         ind = sortperm(xs)
@@ -125,7 +142,7 @@ function gen_data_ghosal(; n = 100, σ = 0.1, plt = false)
         scatter!(p4, xs, m4)
         return [p1, p2, p3, p4]
     else
-        return xs, m1, m2, m3, m4
+        return xs, m1, m2, m3, m4, σs
     end
 end
 
@@ -276,6 +293,32 @@ function single_test_compare_ghosal(;
         for (k, σ) in enumerate(σs)
             x, m1, m2, m3, m4 = gen_data_ghosal(n = n, σ = σ)
             for (j, y) in enumerate([m1, m2, m3, m4])
+                pvals[i, k, j, 1] = meyer(x, y)
+                pvals[i, k, j, 2] = ghosal(x, y)
+                pvals[i, k, j, 3] = bowman(x, y)
+                pvals[i, k, j, 4] = mono_test_bootstrap_cs(x, y; nrep = nrep, kw...)[1]
+                pvals[i, k, j, 5] = mono_test_bootstrap_ss(x, y; nrep = nrep, kw...)[1]
+            end
+        end
+    end
+    return pvals
+end
+
+function single_test_compare_ghosal_snr(;
+        ns = [50, 100, 200],
+        snrs = [50000, 500, 5],
+        nrep = 500, kw...
+    )
+    # proposed, ghosal, meyer, sm
+    pvals = zeros(length(ns), length(snrs), 4, 5)
+    for (i, n) in enumerate(ns)
+        for (k, snr) in enumerate(snrs)
+            x, m1, m2, m3, m4 = gen_data_ghosal(n = n, σ = nothing, snr = snr)
+            for (j, y) in enumerate([m1, m2, m3, m4])
+                # skip m1 since SNR = 0
+                if j == 1
+                    continue
+                end
                 pvals[i, k, j, 1] = meyer(x, y)
                 pvals[i, k, j, 2] = ghosal(x, y)
                 pvals[i, k, j, 3] = bowman(x, y)
