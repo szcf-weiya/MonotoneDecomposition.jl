@@ -1,6 +1,8 @@
 using MonotoneDecomposition
 using Plots
 using Random
+using StatsBase
+using LaTeXStrings
 
 Random.seed!(123)
 x, y, x0, y0 = gen_data(100, 0.1, x -> exp(x));

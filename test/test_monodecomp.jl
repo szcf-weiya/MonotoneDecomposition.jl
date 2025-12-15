@@ -479,6 +479,14 @@ end
     @test all(abs.(cvD1[1].γup -cvD2[1].γup) .< tol)
 end
 
+@testset "L1 loss" begin
+    x, y, _ = gen_data(100, 0.1, x->x^3)
+    cvD1 = cv_mono_decomp_cs(x, y, ss = [0.1, 1.0], Js = 10:10, l1 = true, seed = 1)
+    @test cvD1[1].μ >= 0 # dummy test. just make sure it can run
+    cvD1 = cv_mono_decomp_ss(x, y, method = "double_grid", rλs = 0.6:0.2:1.4, μrange = [1e-7, 1e2], ngrid_μ = 100, seed = 1, l1 = true)
+    @test cvD1[1].μ >= 0 # dummy test
+end
+
 @testset "verify proposition (y = x^2)" begin
     f = x -> x^2
     n = 100
