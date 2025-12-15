@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Solution Path · MonotoneDecomposition.jl</title><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.045/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.24/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="../../"><img src="../../assets/logo.png" alt="MonotoneDecomposition.jl logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="../../">MonotoneDecomposition.jl</a></span></div><form class="docs-search" action="../../search/"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Examples</span><ul><li><a class="tocitem" href="../gp/">Gaussian Process (GP)</a></li><li><input class="collapse-toggle" id="menuitem-2-2" type="checkbox" checked/><label class="tocitem" for="menuitem-2-2"><span class="docs-label">Monotone Decomposition (MD)</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="../md_SE/">On A GP Random Function</a></li><li><a class="tocitem" href="../sample_size/">Effects of Sample Size</a></li><li><a class="tocitem" href="../anyJ/">CS vs MDCS under any J</a></li><li><a class="tocitem" href="../anylam/">SS vs MDSS under any λ</a></li><li class="is-active"><a class="tocitem" href>Solution Path</a><ul class="internal"><li><a class="tocitem" href="#J-8"><span>J = 8</span></a></li><li><a class="tocitem" href="#J-9"><span>J = 9</span></a></li></ul></li></ul></li><li><a class="tocitem" href="../benchmark/">Benchmarking</a></li><li><a class="tocitem" href="../benchmark_parallel/">Benchmarking in Parallel</a></li></ul></li><li><a class="tocitem" href="../../api/">API</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Examples</a></li><li><a class="is-disabled">Monotone Decomposition (MD)</a></li><li class="is-active"><a href>Solution Path</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Solution Path</a></li></ul></nav><div class="docs-right"><a class="docs-edit-link" href="https://github.com/szcf-weiya/MonotoneDecomposition.jl/blob/master/examples/solution_path.jl" title="Edit on GitHub"><span class="docs-icon fab"></span><span class="docs-label is-hidden-touch">Edit on GitHub</span></a><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><pre><code class="language-julia hljs">using MonotoneDecomposition
+using Plots
+using Random
+
+Random.seed!(123)
+x, y, x0, y0 = gen_data(100, 0.1, x -&gt; exp(x));
+μs = 10.0 .^ (-2:0.2:3)
+nμ = length(μs)
+res = Array{Any, 1}(undef, nμ)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">26-element Vector{Any}:
+ #undef
+ #undef
+ #undef
+ #undef
+ #undef
+ #undef
+ #undef
+ #undef
+ #undef
+ #undef
+   ⋮
+ #undef
+ #undef
+ #undef
+ #undef
+ #undef
+ #undef
+ #undef
+ #undef
+ #undef</code></pre><h2 id="J-8"><a class="docs-heading-anchor" href="#J-8">J = 8</a><a id="J-8-1"></a><a class="docs-heading-anchor-permalink" href="#J-8" title="Permalink"></a></h2><pre><code class="language-julia hljs">for i in 1:nμ
+    res[i] = mono_decomp_cs(x, y, J = 8, s = μs[i], s_is_μ=true)
+end
+γups = hcat([res[i].γup for i in 1:nμ]...)
+γdowns = hcat([res[i].γdown for i in 1:nμ]...)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">8×26 Matrix{Float64}:
+ 0.58437  0.58437  0.58437  0.58437  …  0.58437  0.58437  0.58437  0.58437
+ 0.58437  0.58437  0.58437  0.58437     0.58437  0.58437  0.58437  0.58437
+ 0.58437  0.58437  0.58437  0.58437     0.58437  0.58437  0.58437  0.58437
+ 0.58437  0.58437  0.58437  0.58437     0.58437  0.58437  0.58437  0.58437
+ 0.58437  0.58437  0.58437  0.58437     0.58437  0.58437  0.58437  0.58437
+ 0.58437  0.58437  0.58437  0.58437  …  0.58437  0.58437  0.58437  0.58437
+ 0.58437  0.58437  0.58437  0.58437     0.58437  0.58437  0.58437  0.58437
+ 0.58437  0.58437  0.58437  0.58437     0.58437  0.58437  0.58437  0.58437</code></pre><p>save the results</p><pre><code class="language-julia hljs">serialize(&quot;../res/solution_path/expx-sigma0.1-J8.sil&quot;, [γups, γdowns, res, μs, x, y])</code></pre><p>calculate the coefficients via the least square solution</p><pre><code class="language- hljs">γls = inv(res[1].workspace.B&#39; * res[1].workspace.B) * res[1].workspace.B&#39; * y
+c = mean(res[1].workspace.B * γls) / 2
+γups_calculated = [γls ./ (μ + 1) .+ (μ - 1) / (μ + 1) * c for μ in μs]
+γups_ls = hcat(γups_calculated...)</code></pre><p>plot the coefficients along the tuning parameter μ</p><pre><code class="language- hljs">default_colors = palette(:auto)
+plot(log10.(μs), γups[1, :], label = L&quot;\hat\gamma_1^u&quot;, xlab = L&quot;\log_{10}\; \mu&quot;, color = default_colors[1])
+plot!(log10.(μs), γups_ls[1, :], label = L&quot;\gamma_1^{u}&quot;, ls = :dash, lw = 2, color = default_colors[1])
+plot!(log10.(μs), γups[2, :], label = L&quot;\hat\gamma_2^u&quot;, color = default_colors[2])
+plot!(log10.(μs), γups_ls[2, :], label = L&quot;\gamma_2^{u}&quot;, ls = :dash, lw = 2, color = default_colors[2])
+plot!(log10.(μs), γups[3, :], label = L&quot;\hat\gamma_3^u&quot;, color = default_colors[3])
+plot!(log10.(μs), γups_ls[3, :], label = L&quot;\gamma_3^{u}&quot;, ls = :dash, lw = 2, color = default_colors[3])
+plot!(log10.(μs), γups[4, :], label = L&quot;\hat\gamma_4^u&quot;, color = default_colors[4])
+plot!(log10.(μs), γups_ls[4, :], label = L&quot;\gamma_4^{u}&quot;, ls = :dash, lw = 2, color = default_colors[4])
+plot!(log10.(μs), γups[5, :], label = L&quot;\hat\gamma_5^u&quot;, color = default_colors[5])
+plot!(log10.(μs), γups_ls[5, :], label = L&quot;\gamma_5^{u}&quot;, ls = :dash, lw = 2, color = default_colors[5])
+plot!(log10.(μs), γups[6, :], label = L&quot;\hat\gamma_6^u&quot;, color = default_colors[6])
+plot!(log10.(μs), γups_ls[6, :], label = L&quot;\gamma_6^{u}&quot;, ls = :dash, lw = 2, color = default_colors[6])
+plot!(log10.(μs), γups[7, :], label = L&quot;\hat\gamma_7^u&quot;, color = default_colors[7])
+plot!(log10.(μs), γups_ls[7, :], label = L&quot;\gamma_7^{u}&quot;, ls = :dash, lw = 2, color = default_colors[7])
+plot!(log10.(μs), γups[8, :], label = L&quot;\hat\gamma_8^u&quot;, color = default_colors[8])
+plot!(log10.(μs), γups_ls[8, :], label = L&quot;\gamma_8^{u}&quot;, ls = :dash, lw = 2, color = default_colors[8])</code></pre><p>save the results</p><pre><code class="language-julia hljs">savefig(&quot;../res/solution_path/expx-sigma0.1-J8-up.pdf&quot;)</code></pre><p>plot the difference between the estimated coefficients and the theoretical constant vector</p><pre><code class="language- hljs">diff_downs = sum((γdowns .- c).^2, dims = 1)[:]
+plot(log10.(μs), log10.(diff_downs), xlab = L&quot;\log_{10}\; \mu&quot;, label = &quot;&quot;, ylab = L&quot;\log_{10}\Vert \hat\gamma^d - \gamma^d\Vert_2^2&quot;)</code></pre><p>save the figure</p><pre><code class="language-julia hljs">savefig(&quot;../res/solution_path/expx-sigma0.1-J8-down.pdf&quot;)</code></pre><h2 id="J-9"><a class="docs-heading-anchor" href="#J-9">J = 9</a><a id="J-9-1"></a><a class="docs-heading-anchor-permalink" href="#J-9" title="Permalink"></a></h2><pre><code class="language-julia hljs">for i in 1:nμ
+    res[i] = mono_decomp_cs(x, y, J = 9, s = μs[i], s_is_μ=true)
+end
+γups = hcat([res[i].γup for i in 1:nμ]...)
+γdowns = hcat([res[i].γdown for i in 1:nμ]...)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">9×26 Matrix{Float64}:
+ 0.58437  0.58437  0.58437  0.58437  …  0.58437  0.58437  0.58437  0.58437
+ 0.58437  0.58437  0.58437  0.58437     0.58437  0.58437  0.58437  0.58437
+ 0.58437  0.58437  0.58437  0.58437     0.58437  0.58437  0.58437  0.58437
+ 0.58437  0.58437  0.58437  0.58437     0.58437  0.58437  0.58437  0.58437
+ 0.58437  0.58437  0.58437  0.58437     0.58437  0.58437  0.58437  0.58437
+ 0.58437  0.58437  0.58437  0.58437  …  0.58437  0.58437  0.58437  0.58437
+ 0.58437  0.58437  0.58437  0.58437     0.58437  0.58437  0.58437  0.58437
+ 0.58437  0.58437  0.58437  0.58437     0.58437  0.58437  0.58437  0.58437
+ 0.58437  0.58437  0.58437  0.58437     0.58437  0.58437  0.58437  0.58437</code></pre><p>save the results</p><pre><code class="language-julia hljs">serialize(&quot;../res/solution_path/expx-sigma0.1-J9.sil&quot;, [γups, γdowns, res, μs, x, y])</code></pre><h3 id="without-tied-information"><a class="docs-heading-anchor" href="#without-tied-information">without tied information</a><a id="without-tied-information-1"></a><a class="docs-heading-anchor-permalink" href="#without-tied-information" title="Permalink"></a></h3><p>calculate the coefficients via the least square solution</p><pre><code class="language- hljs">γls = inv(res[1].workspace.B&#39; * res[1].workspace.B) * res[1].workspace.B&#39; * y
+c = mean(res[1].workspace.B * γls) / 2
+γups_calculated = [γls ./ (μ + 1) .+ (μ - 1) / (μ + 1) * c for μ in μs]
+γups_ls = hcat(γups_calculated...)</code></pre><p>plot the coefficients along the tuning parameter μ</p><pre><code class="language- hljs">plot(log10.(μs), γups[1, :], label = L&quot;\hat\gamma_1^u&quot;, xlab = L&quot;\log_{10}\; \mu&quot;, color = default_colors[1], lw = 3, alpha = 0.5)
+plot!(log10.(μs), γups_ls[1, :], label = L&quot;\gamma_1^{u}&quot;, ls = :dash, lw = 2, color = default_colors[1])
+plot!(log10.(μs), γups[2, :], label = L&quot;\hat\gamma_2^u&quot;, color = default_colors[2])
+plot!(log10.(μs), γups_ls[2, :], label = L&quot;\gamma_2^{u}&quot;, ls = :dash, lw = 2, color = default_colors[2])
+plot!(log10.(μs), γups[3, :], label = L&quot;\hat\gamma_3^u&quot;, color = default_colors[3])
+plot!(log10.(μs), γups_ls[3, :], label = L&quot;\gamma_3^{u}&quot;, ls = :dash, lw = 2, color = default_colors[3])
+plot!(log10.(μs), γups[4, :], label = L&quot;\hat\gamma_4^u&quot;, color = default_colors[4])
+plot!(log10.(μs), γups_ls[4, :], label = L&quot;\gamma_4^{u}&quot;, ls = :dash, lw = 2, color = default_colors[4])
+plot!(log10.(μs), γups[5, :], label = L&quot;\hat\gamma_5^u&quot;, color = default_colors[5])
+plot!(log10.(μs), γups_ls[5, :], label = L&quot;\gamma_5^{u}&quot;, ls = :dash, lw = 2, color = default_colors[5])
+plot!(log10.(μs), γups[6, :], label = L&quot;\hat\gamma_6^u&quot;, color = default_colors[6])
+plot!(log10.(μs), γups_ls[6, :], label = L&quot;\gamma_6^{u}&quot;, ls = :dash, lw = 2, color = default_colors[6])
+plot!(log10.(μs), γups[7, :], label = L&quot;\hat\gamma_7^u&quot;, color = default_colors[7])
+plot!(log10.(μs), γups_ls[7, :], label = L&quot;\gamma_7^{u}&quot;, ls = :dash, lw = 2, color = default_colors[7])
+plot!(log10.(μs), γups[8, :], label = L&quot;\hat\gamma_8^u&quot;, color = default_colors[8])
+plot!(log10.(μs), γups_ls[8, :], label = L&quot;\gamma_8^{u}&quot;, ls = :dash, lw = 2, color = default_colors[8])
+plot!(log10.(μs), γups[9, :], label = L&quot;\hat\gamma_9^u&quot;, color = default_colors[9])
+plot!(log10.(μs), γups_ls[9, :], label = L&quot;\gamma_9^{u}&quot;, ls = :dash, lw = 2, color = default_colors[9])</code></pre><p>save the figure</p><pre><code class="language-julia hljs">savefig(&quot;../res/solution_path/expx-sigma0.1-J9-up-ls.pdf&quot;)</code></pre><pre><code class="language- hljs">diff_downs = sum((γdowns .- c).^2, dims = 1)[:]
+plot(log10.(μs), log10.(diff_downs), xlab = L&quot;\log_{10}\; \mu&quot;, label = &quot;&quot;, ylab = L&quot;\log_{10}\Vert \hat\gamma^d - \gamma^d\Vert_2^2&quot;)</code></pre><p>save the figure</p><pre><code class="language-julia hljs">savefig(&quot;../res/solution_path/expx-sigma0.1-J9-down-ls.pdf&quot;)</code></pre><h3 id="with-tied-information"><a class="docs-heading-anchor" href="#with-tied-information">with tied information</a><a id="with-tied-information-1"></a><a class="docs-heading-anchor-permalink" href="#with-tied-information" title="Permalink"></a></h3><pre><code class="language- hljs">G = hcat(zeros(8), 1.0I(8))
+G[1, 1] = 1
+γGls = G&#39; * inv(G * res[1].workspace.B&#39; * res[1].workspace.B * G&#39;) * G * res[1].workspace.B&#39; * y
+c = mean(res[1].workspace.B * γGls) / 2
+γups_calculated = [γGls ./ (μ + 1) .+ (μ - 1) / (μ + 1) * c for μ in μs]
+γups_ls = hcat(γups_calculated...)</code></pre><p>plot the results</p><pre><code class="language- hljs">plot(log10.(μs), γups[1, :], label = L&quot;\hat\gamma_1^u&quot;, xlab = L&quot;\log_{10}\; \mu&quot;, color = default_colors[1], lw = 3, alpha = 0.5)
+plot!(log10.(μs), γups_ls[1, :], label = L&quot;\gamma_1^{u}&quot;, ls = :dash, lw = 2, color = default_colors[1])
+plot!(log10.(μs), γups[2, :], label = L&quot;\hat\gamma_2^u&quot;, color = default_colors[2])
+plot!(log10.(μs), γups_ls[2, :], label = L&quot;\gamma_2^{u}&quot;, ls = :dash, lw = 2, color = default_colors[2])
+plot!(log10.(μs), γups[3, :], label = L&quot;\hat\gamma_3^u&quot;, color = default_colors[3])
+plot!(log10.(μs), γups_ls[3, :], label = L&quot;\gamma_3^{u}&quot;, ls = :dash, lw = 2, color = default_colors[3])
+plot!(log10.(μs), γups[4, :], label = L&quot;\hat\gamma_4^u&quot;, color = default_colors[4])
+plot!(log10.(μs), γups_ls[4, :], label = L&quot;\gamma_4^{u}&quot;, ls = :dash, lw = 2, color = default_colors[4])
+plot!(log10.(μs), γups[5, :], label = L&quot;\hat\gamma_5^u&quot;, color = default_colors[5])
+plot!(log10.(μs), γups_ls[5, :], label = L&quot;\gamma_5^{u}&quot;, ls = :dash, lw = 2, color = default_colors[5])
+plot!(log10.(μs), γups[6, :], label = L&quot;\hat\gamma_6^u&quot;, color = default_colors[6])
+plot!(log10.(μs), γups_ls[6, :], label = L&quot;\gamma_6^{u}&quot;, ls = :dash, lw = 2, color = default_colors[6])
+plot!(log10.(μs), γups[7, :], label = L&quot;\hat\gamma_7^u&quot;, color = default_colors[7])
+plot!(log10.(μs), γups_ls[7, :], label = L&quot;\gamma_7^{u}&quot;, ls = :dash, lw = 2, color = default_colors[7])
+plot!(log10.(μs), γups[8, :], label = L&quot;\hat\gamma_8^u&quot;, color = default_colors[8])
+plot!(log10.(μs), γups_ls[8, :], label = L&quot;\gamma_8^{u}&quot;, ls = :dash, lw = 2, color = default_colors[8])
+plot!(log10.(μs), γups[9, :], label = L&quot;\hat\gamma_9^u&quot;, color = default_colors[9])
+plot!(log10.(μs), γups_ls[9, :], label = L&quot;\gamma_9^{u}&quot;, ls = :dash, lw = 2, color = default_colors[9])</code></pre><p>save the figure</p><pre><code class="language-julia hljs">savefig(&quot;../res/solution_path/expx-sigma0.1-J9-up-gls.pdf&quot;)</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../anylam/">« SS vs MDSS under any λ</a><a class="docs-footer-nextpage" href="../benchmark/">Benchmarking »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.25 on <span class="colophon-date" title="Monday 15 December 2025 05:16">Monday 15 December 2025</span>. Using Julia version 1.8.4.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
