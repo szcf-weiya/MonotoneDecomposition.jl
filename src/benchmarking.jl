@@ -23,6 +23,7 @@ function benchmarking_cs(n::Int = 100, σ::Union{Real, Nothing} = 0.5, f::Union{
                                                                                seed = 1,
                                                                                dataseed = 1,
                                                                                δJ = 100,
+                                                                               l1 = false,
                                                                                μs = 10.0 .^ (-6:0.5:0), kw...)
     Random.seed!(dataseed)
     x, y, x0, y0 = gen_data(n, σ, f, snr = snr)
@@ -32,7 +33,7 @@ function benchmarking_cs(n::Int = 100, σ::Union{Real, Nothing} = 0.5, f::Union{
     if fixJ
         Js = J:J
     end
-    D, _ = cv_mono_decomp_cs(x, y, x0, Js = Js, ss = μs, figname = figname_cv, nfold = nfold, one_se_rule = one_se_rule, seed = seed)
+    D, _ = cv_mono_decomp_cs(x, y, x0, Js = Js, ss = μs, figname = figname_cv, nfold = nfold, one_se_rule = one_se_rule, seed = seed, l1 = l1)
     err = [norm(D.yhat - y)^2 / length(y), norm(predict(D, x0) - y0)^2 / length(y0), 
            norm(yhat - y)^2 / length(y), norm(yhatnew - y0)^2 / length(y0),
            var(y), var(y0)]
@@ -124,6 +125,7 @@ function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                             use_snr = false,
                             nλ = 20, rλ = 0.5, verbose = false,
                             multi_fix_ratio = false,
+                            l1 = false,
                             kw...)
     @info "Benchmarking $f with $nrep repetitions"
     title = "$f (nrep = $nrep)"
@@ -163,6 +165,7 @@ function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                                                         rλ = rλ,
                                                         multi_fix_ratio = multi_fix_ratio,
                                                         dataseed = i,
+                                                        l1 = l1,
                                                         verbose = verbose, kw...)
             else
                 res[i, :, j] = benchmarking_cs(n, σ, f; figname_cv = figname_cv, 
@@ -172,6 +175,7 @@ function benchmarking(f::String = "x^3"; n = 100, σs = 0.2:0.2:1,
                                                         snr = arr_snrs[j],
                                                         one_se_rule = one_se_rule,
                                                         dataseed = i,
+                                                        l1 = l1,
                                                         fixJ = !occursin("cvbspl2", competitor), kw...)
             end
             next!(p)
