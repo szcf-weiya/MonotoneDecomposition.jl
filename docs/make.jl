@@ -21,7 +21,8 @@ makedocs(sitename="MonotoneDecomposition.jl",
                 "Effects of Sample Size" => "examples/sample_size.md",
                 "CS vs MDCS under any J" => "examples/anyJ.md",
                 "SS vs MDSS under any λ" => "examples/anylam.md",
-                "Solution Path" => "examples/solution_path.md"
+                "Solution Path" => "examples/solution_path.md",
+                "L1 Penalty" => "examples/l1.md",
             ],
             "Benchmarking" => [
                 "Benchmarking" => "examples/benchmark.md",
